@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "509693229826",
+    "project_id": "scanpos-703e6",
+    "storage_bucket": "scanpos-703e6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:509693229826:android:b19e14e5cb6afbd9dda01b",
+        "android_client_info": {
+          "package_name": "com.scanpos.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBzKmNngh-fIyrZOf1iWKp-rvBcixLhHfo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

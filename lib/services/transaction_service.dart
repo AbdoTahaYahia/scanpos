@@ -1,0 +1,102 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uuid/uuid.dart';
+import '../models/transaction.dart';
+import '../models/cart_item.dart';
+
+class TransactionService {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final Uuid _uuid = const Uuid();
+
+  /// Collection reference for transactions in a store
+  CollectionReference<Map<String, dynamic>> _transactionsRef(String storeId) {
+    return _firestore
+        .collection('stores')
+        .doc(storeId)
+        .collection('transactions');
+  }
+
+  /// Create a new transaction with atomic stock decrement
+  Future<SaleTransaction> createTransaction({
+    required String storeId,
+    required String cashierId,
+    required String cashierName,
+    required List<CartItem> cartItems,
+  }) async {
+    final transactionId = _uuid.v4();
+    final now = DateTime.now();
+
+    // Convert cart items to transaction items
+    final transactionItems = cartItems
+        .map((item) => TransactionItem(
+              productId: item.product.id,
+              productName: item.product.name,
+              price: item.product.price,
+              quantity: item.quantity,
+              subtotal: item.subtotal,
+            ))
+        .toList();
+
+    final totalAmount =
+        cartItems.fold<double>(0, (total, item) => total + item.subtotal);
+
+    final transaction = SaleTransaction(
+      id: transactionId,
+      storeId: storeId,
+      cashierId: cashierId,
+      cashierName: cashierName,
+      items: transactionItems,
+      totalAmount: totalAmount,
+      timestamp: now,
+    );
+
+    // Use a Firestore batch to atomically:
+    // 1. Create the transaction record
+    // 2. Decrement stock for each product
+    final batch = _firestore.batch();
+
+    // Add the transaction document
+    batch.set(
+      _transactionsRef(storeId).doc(transactionId),
+      transaction.toMap(),
+    );
+
+    // Decrement stock for each item
+    for (final item in cartItems) {
+      final productRef = _firestore
+          .collection('stores')
+          .doc(storeId)
+          .collection('products')
+          .doc(item.product.id);
+
+      batch.update(productRef, {
+        'quantityInStock': FieldValue.increment(-item.quantity),
+      });
+    }
+
+    await batch.commit();
+    return transaction;
+  }
+
+  /// Stream all transactions for a store (reverse chronological)
+  Stream<List<SaleTransaction>> getTransactions(String storeId) {
+    return _transactionsRef(storeId)
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) => SaleTransaction.fromMap(doc.data()))
+          .toList();
+    });
+  }
+
+  /// Get a single transaction by ID
+  Future<SaleTransaction?> getTransaction(
+    String storeId,
+    String transactionId,
+  ) async {
+    final doc =
+        await _transactionsRef(storeId).doc(transactionId).get();
+    if (!doc.exists) return null;
+    return SaleTransaction.fromMap(doc.data()!);
+  }
+}
