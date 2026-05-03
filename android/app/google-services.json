@@ -12,7 +12,20 @@
           "package_name": "com.scanpos.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "509693229826-45j9h45gkqa885kbabjqbgr98lnl5nra.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.scanpos.app",
+            "certificate_hash": "3aeb0e94bea4fbf6a7c489c300a4c1a3f075a306"
+          }
+        },
+        {
+          "client_id": "509693229826-2qotd8cjuhaoo7vd3aqa64acnii8npi2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBzKmNngh-fIyrZOf1iWKp-rvBcixLhHfo"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "509693229826-2qotd8cjuhaoo7vd3aqa64acnii8npi2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

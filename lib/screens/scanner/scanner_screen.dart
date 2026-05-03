@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:camera/camera.dart';
+import 'package:google_mlkit_barcode_scanning/google_mlkit_barcode_scanning.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/cart_provider.dart';
+import '../../providers/inventory_provider.dart';
 import '../../services/product_service.dart';
+import '../../models/product.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_styles.dart';
 import '../../widgets/pill_button.dart';
@@ -22,30 +26,60 @@ class ScannerScreen extends StatefulWidget {
 
 class _ScannerScreenState extends State<ScannerScreen>
     with WidgetsBindingObserver {
-  late MobileScannerController _scannerController;
+  CameraController? _cameraController;
+  final BarcodeScanner _barcodeScanner = BarcodeScanner();
+  final TextRecognizer _textRecognizer = TextRecognizer();
   final ProductService _productService = ProductService();
   final _currencyFormat = NumberFormat.currency(symbol: 'EGP ', decimalDigits: 2);
-  bool _isProcessingScan = false;
+
+  bool _isProcessing = false;
+  bool _isCameraReady = false;
+  Product? _textMatchedProduct;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _scannerController = MobileScannerController(
-      detectionSpeed: DetectionSpeed.normal,
-      facing: CameraFacing.back,
-    );
+    _initCamera();
+  }
+
+  Future<void> _initCamera() async {
+    try {
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) return;
+
+      final back = cameras.firstWhere(
+        (c) => c.lensDirection == CameraLensDirection.back,
+        orElse: () => cameras.first,
+      );
+
+      _cameraController = CameraController(
+        back,
+        ResolutionPreset.medium,
+        enableAudio: false,
+        imageFormatGroup: ImageFormatGroup.nv21,
+      );
+
+      await _cameraController!.initialize();
+      if (!mounted) return;
+
+      setState(() => _isCameraReady = true);
+      if (widget.isActive) {
+        _cameraController!.startImageStream(_processFrame);
+      }
+    } catch (e) {
+      debugPrint('Camera init error: $e');
+    }
   }
 
   @override
   void didUpdateWidget(covariant ScannerScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isActive && !oldWidget.isActive) {
-      // Tab became active — restart camera
-      _restartCamera();
+      // Tab became active — fully reinitialize camera for fresh preview
+      _reinitCamera();
     } else if (!widget.isActive && oldWidget.isActive) {
-      // Tab became inactive — stop camera
-      _scannerController.stop();
+      _disposeCamera();
     }
   }
 
@@ -53,42 +87,88 @@ class _ScannerScreenState extends State<ScannerScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!widget.isActive) return;
     if (state == AppLifecycleState.resumed) {
-      _restartCamera();
+      _reinitCamera();
     } else if (state == AppLifecycleState.paused) {
-      _scannerController.stop();
+      _disposeCamera();
     }
   }
 
-  Future<void> _restartCamera() async {
-    try {
-      await _scannerController.stop();
-    } catch (_) {}
-    try {
-      await _scannerController.start();
-    } catch (_) {}
+  Future<void> _reinitCamera() async {
+    await _disposeCamera();
+    await _initCamera();
   }
 
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _scannerController.dispose();
-    super.dispose();
+  Future<void> _disposeCamera() async {
+    try {
+      if (_cameraController?.value.isStreamingImages == true) {
+        await _cameraController?.stopImageStream();
+      }
+      await _cameraController?.dispose();
+    } catch (_) {}
+    _cameraController = null;
+    if (mounted) setState(() => _isCameraReady = false);
   }
 
-  Future<void> _onBarcodeDetected(BarcodeCapture capture) async {
-    if (_isProcessingScan) return;
-    if (capture.barcodes.isEmpty) return;
+  void _processFrame(CameraImage image) async {
+    if (_isProcessing) return;
+    _isProcessing = true;
 
-    final barcode = capture.barcodes.first.rawValue;
-    if (barcode == null || barcode.isEmpty) return;
+    try {
+      final inputImage = _toInputImage(image);
+      if (inputImage == null) {
+        _isProcessing = false;
+        return;
+      }
 
-    setState(() => _isProcessingScan = true);
+      // 1. Try barcode first (priority)
+      final barcodes = await _barcodeScanner.processImage(inputImage);
+      if (barcodes.isNotEmpty) {
+        final rawValue = barcodes.first.rawValue;
+        if (rawValue != null && rawValue.isNotEmpty) {
+          await _handleBarcode(rawValue);
+          // Wait before next scan
+          await Future.delayed(const Duration(milliseconds: 1500));
+          _isProcessing = false;
+          return;
+        }
+      }
 
+      // 2. No barcode found — try text recognition
+      final textResult = await _textRecognizer.processImage(inputImage);
+      if (textResult.text.isNotEmpty && mounted) {
+        _handleDetectedText(textResult.text, textResult.blocks);
+      }
+    } catch (_) {}
+
+    // Throttle processing
+    await Future.delayed(const Duration(milliseconds: 400));
+    _isProcessing = false;
+  }
+
+  InputImage? _toInputImage(CameraImage image) {
+    try {
+      final rotation = _cameraController?.description.sensorOrientation ?? 0;
+      final inputRotation = InputImageRotationValue.fromRawValue(rotation);
+      if (inputRotation == null) return null;
+
+      final plane = image.planes.first;
+      return InputImage.fromBytes(
+        bytes: plane.bytes,
+        metadata: InputImageMetadata(
+          size: Size(image.width.toDouble(), image.height.toDouble()),
+          rotation: inputRotation,
+          format: InputImageFormat.nv21,
+          bytesPerRow: plane.bytesPerRow,
+        ),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _handleBarcode(String barcode) async {
     final storeId = context.read<AuthProvider>().appUser?.storeId;
-    if (storeId == null) {
-      setState(() => _isProcessingScan = false);
-      return;
-    }
+    if (storeId == null) return;
 
     final product = await _productService.getProductByBarcode(storeId, barcode);
 
@@ -97,6 +177,10 @@ class _ScannerScreenState extends State<ScannerScreen>
     if (product != null) {
       context.read<CartProvider>().addItem(product);
       ScanFeedbackOverlay.show(context, productName: product.name);
+      // Clear text match since barcode found
+      setState(() {
+        _textMatchedProduct = null;
+      });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -105,10 +189,60 @@ class _ScannerScreenState extends State<ScannerScreen>
         ),
       );
     }
+  }
 
-    // Delay to prevent rapid re-scanning of the same code
-    await Future.delayed(const Duration(milliseconds: 1500));
-    if (mounted) setState(() => _isProcessingScan = false);
+  void _handleDetectedText(String fullText, List<TextBlock> blocks) {
+    final products = context.read<InventoryProvider>().products;
+    if (products.isEmpty) return;
+
+    final textLower = fullText.toLowerCase();
+    Product? bestMatch;
+    int bestScore = 0;
+
+    for (final product in products) {
+      final nameLower = product.name.toLowerCase();
+      final words = nameLower.split(RegExp(r'[\s\-,]+'))
+          .where((w) => w.length > 2)
+          .toList();
+
+      int score = 0;
+
+      if (textLower.contains(nameLower)) {
+        score += 10;
+      } else {
+        for (final word in words) {
+          if (textLower.contains(word)) score++;
+        }
+      }
+
+      for (final block in blocks) {
+        final blockLower = block.text.toLowerCase();
+        if (blockLower.contains(nameLower) || nameLower.contains(blockLower)) {
+          score += 5;
+        }
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = product;
+      }
+    }
+
+    if (bestScore >= 2 && mounted) {
+      setState(() {
+        _textMatchedProduct = bestMatch;
+      });
+    }
+  }
+
+  void _addTextMatchedProduct() {
+    if (_textMatchedProduct != null) {
+      context.read<CartProvider>().addItem(_textMatchedProduct!);
+      ScanFeedbackOverlay.show(context, productName: _textMatchedProduct!.name);
+      setState(() {
+        _textMatchedProduct = null;
+      });
+    }
   }
 
   Future<void> _handleCheckout() async {
@@ -178,6 +312,15 @@ class _ScannerScreenState extends State<ScannerScreen>
   }
 
   @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _cameraController?.dispose();
+    _barcodeScanner.close();
+    _textRecognizer.close();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final cartProvider = context.watch<CartProvider>();
 
@@ -192,51 +335,89 @@ class _ScannerScreenState extends State<ScannerScreen>
 
             AppStyles.gap16,
 
-            // ─── Scanner View ────────────────────────────────────
+            // ─── Camera View ─────────────────────────────────────
             Padding(
-                padding: AppStyles.paddingHorizontal,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                  child: Container(
-                    height: 220,
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: AppTheme.black,
-                        width: 2,
-                      ),
-                      borderRadius:
-                          BorderRadius.circular(AppTheme.radiusMd),
-                    ),
-                    child: ClipRRect(
-                      borderRadius:
-                          BorderRadius.circular(AppTheme.radiusMd - 2),
-                      child: Stack(
-                        children: [
-                          MobileScanner(
-                            controller: _scannerController,
-                            onDetect: _onBarcodeDetected,
-                          ),
-                          // Scan line indicator
-                          if (_isProcessingScan)
-                            Container(
-                              color: AppTheme.black.withValues(alpha: 0.3),
-                              child: const Center(
-                                child: CircularProgressIndicator(
-                                  color: AppTheme.white,
-                                  strokeWidth: 3,
-                                ),
+              padding: AppStyles.paddingHorizontal,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                child: Container(
+                  height: 220,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppTheme.black, width: 2),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd - 2),
+                    child: _isCameraReady && _cameraController != null
+                        ? FittedBox(
+                            fit: BoxFit.cover,
+                            child: SizedBox(
+                              width: _cameraController!.value.previewSize?.height ?? 640,
+                              height: _cameraController!.value.previewSize?.width ?? 480,
+                              child: CameraPreview(_cameraController!),
+                            ),
+                          )
+                        : Container(
+                            color: AppTheme.black,
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                color: AppTheme.white,
+                                strokeWidth: 3,
                               ),
                             ),
-                          // Corner guides
-                          ..._buildCornerGuides(),
-                        ],
-                      ),
+                          ),
+                  ),
+                ),
+              ),
+            ),
+
+            // ─── Text Match Banner ───────────────────────────────
+            if (_textMatchedProduct != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+                child: GestureDetector(
+                  onTap: _addTextMatchedProduct,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.black,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.text_fields_rounded, color: AppTheme.white, size: 20),
+                        AppStyles.gapW8,
+                        Expanded(
+                          child: Text(
+                            _textMatchedProduct!.name,
+                            style: AppTheme.bodyLg.copyWith(
+                              color: AppTheme.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        AppStyles.gapW8,
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppTheme.white,
+                            borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                          ),
+                          child: Text(
+                            '+ Add',
+                            style: AppTheme.labelBold.copyWith(color: AppTheme.black),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
 
-            AppStyles.gap16,
+            AppStyles.gap12,
 
             // ─── Cart Section ────────────────────────────────────
             Expanded(
@@ -266,12 +447,11 @@ class _ScannerScreenState extends State<ScannerScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'TOTAL',
-                                style: AppTheme.labelBold.copyWith(
+                                'Total',
+                                style: AppTheme.bodySm.copyWith(
                                   color: AppTheme.onSurfaceVariant,
                                 ),
                               ),
-                              AppStyles.gap4,
                               Text(
                                 _currencyFormat.format(cartProvider.totalAmount),
                                 style: AppTheme.priceDisplay,
@@ -280,8 +460,8 @@ class _ScannerScreenState extends State<ScannerScreen>
                           ),
                           Text(
                             '${cartProvider.itemCount} items',
-                            style: AppTheme.bodySm.copyWith(
-                              color: AppTheme.onSurfaceVariant,
+                            style: AppTheme.bodyLg.copyWith(
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ],
@@ -338,7 +518,7 @@ class _ScannerScreenState extends State<ScannerScreen>
           ),
           AppStyles.gap8,
           Text(
-            'Scan a product to get started',
+            'Scan a barcode or point at product text',
             style: AppTheme.bodySm.copyWith(
               color: AppTheme.outline,
             ),
@@ -358,7 +538,8 @@ class _ScannerScreenState extends State<ScannerScreen>
         return Dismissible(
           key: ValueKey(item.product.id),
           direction: DismissDirection.endToStart,
-          onDismissed: (_) => cartProvider.removeItem(item.product.id),
+          onDismissed: (_) =>
+              cartProvider.removeItem(item.product.id),
           background: Container(
             alignment: Alignment.centerRight,
             padding: const EdgeInsets.only(right: 24),
@@ -366,17 +547,30 @@ class _ScannerScreenState extends State<ScannerScreen>
               color: AppTheme.error,
               borderRadius: BorderRadius.circular(AppTheme.radiusMd),
             ),
-            child: const Icon(
-              Icons.delete_rounded,
-              color: AppTheme.white,
-              size: 28,
-            ),
+            child: const Icon(Icons.delete_rounded, color: AppTheme.white),
           ),
           child: RoundedCard(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // Product info
+                // Product icon
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.inventory_2_rounded,
+                    color: AppTheme.outline,
+                    size: 22,
+                  ),
+                ),
+
+                AppStyles.gapW16,
+
+                // Name + price
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -389,7 +583,6 @@ class _ScannerScreenState extends State<ScannerScreen>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      AppStyles.gap4,
                       Text(
                         _currencyFormat.format(item.product.price),
                         style: AppTheme.bodySm.copyWith(
@@ -447,83 +640,5 @@ class _ScannerScreenState extends State<ScannerScreen>
         );
       },
     );
-  }
-
-  List<Widget> _buildCornerGuides() {
-    const guideSize = 32.0;
-    const guideThickness = 4.0;
-    const guideColor = AppTheme.white;
-    const guideInset = 16.0;
-
-    Widget corner({
-      required Alignment alignment,
-      required BorderRadius radius,
-    }) {
-      return Positioned(
-        left: alignment == Alignment.topLeft ||
-                alignment == Alignment.bottomLeft
-            ? guideInset
-            : null,
-        right: alignment == Alignment.topRight ||
-                alignment == Alignment.bottomRight
-            ? guideInset
-            : null,
-        top: alignment == Alignment.topLeft ||
-                alignment == Alignment.topRight
-            ? guideInset
-            : null,
-        bottom: alignment == Alignment.bottomLeft ||
-                alignment == Alignment.bottomRight
-            ? guideInset
-            : null,
-        child: Container(
-          width: guideSize,
-          height: guideSize,
-          decoration: BoxDecoration(
-            border: Border(
-              top: alignment == Alignment.topLeft ||
-                      alignment == Alignment.topRight
-                  ? const BorderSide(
-                      color: guideColor, width: guideThickness)
-                  : BorderSide.none,
-              bottom: alignment == Alignment.bottomLeft ||
-                      alignment == Alignment.bottomRight
-                  ? const BorderSide(
-                      color: guideColor, width: guideThickness)
-                  : BorderSide.none,
-              left: alignment == Alignment.topLeft ||
-                      alignment == Alignment.bottomLeft
-                  ? const BorderSide(
-                      color: guideColor, width: guideThickness)
-                  : BorderSide.none,
-              right: alignment == Alignment.topRight ||
-                      alignment == Alignment.bottomRight
-                  ? const BorderSide(
-                      color: guideColor, width: guideThickness)
-                  : BorderSide.none,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return [
-      corner(
-        alignment: Alignment.topLeft,
-        radius: const BorderRadius.only(topLeft: Radius.circular(4)),
-      ),
-      corner(
-        alignment: Alignment.topRight,
-        radius: const BorderRadius.only(topRight: Radius.circular(4)),
-      ),
-      corner(
-        alignment: Alignment.bottomLeft,
-        radius: const BorderRadius.only(bottomLeft: Radius.circular(4)),
-      ),
-      corner(
-        alignment: Alignment.bottomRight,
-        radius: const BorderRadius.only(bottomRight: Radius.circular(4)),
-      ),
-    ];
   }
 }

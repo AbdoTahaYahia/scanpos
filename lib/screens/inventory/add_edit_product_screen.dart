@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:camera/camera.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:provider/provider.dart';
 import '../../models/product.dart';
 import '../../providers/auth_provider.dart';
@@ -65,9 +67,17 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
       builder: (_) => _BarcodeScanDialog(),
     );
     if (result != null && result.isNotEmpty) {
-      _barcodeCtrl.text = result;
-      // Auto-lookup product info from the internet
-      await _lookupProductInfo(result);
+      if (result.startsWith('TEXT:')) {
+        // Text was detected instead of barcode — use as product name
+        final text = result.substring(5).trim();
+        _nameCtrl.text = text;
+        setState(() {});
+      } else {
+        // Barcode scanned
+        _barcodeCtrl.text = result;
+        // Auto-lookup product info from the internet
+        await _lookupProductInfo(result);
+      }
     }
   }
 
@@ -346,8 +356,8 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
 
                     // ─── Barcode ────────────────────────────────────
                     PillInput(
-                      label: 'Barcode Number',
-                      hint: 'Scan or type barcode',
+                      label: 'Barcode Number (Optional)',
+                      hint: 'Scan or type barcode (optional)',
                       controller: _barcodeCtrl,
                       textInputAction: TextInputAction.next,
                       suffixIcon: Row(
@@ -365,7 +375,6 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                           ),
                         ],
                       ),
-                      validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
                     ),
                     AppStyles.gap16,
 
@@ -441,7 +450,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   }
 }
 
-/// Dialog for scanning barcode
+/// Smart scan dialog — scans for barcode AND reads text
 class _BarcodeScanDialog extends StatefulWidget {
   @override
   State<_BarcodeScanDialog> createState() => _BarcodeScanDialogState();
@@ -463,7 +472,12 @@ class _BarcodeScanDialogState extends State<_BarcodeScanDialog> {
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('Scan Barcode', style: AppTheme.headlineMd),
+          Text('Scan Product', style: AppTheme.headlineMd),
+          AppStyles.gap4,
+          Text(
+            'Scan barcode or use "Read Text" if none',
+            style: AppTheme.bodySm.copyWith(color: AppTheme.onSurfaceVariant),
+          ),
           AppStyles.gap16,
           ClipRRect(
             borderRadius: BorderRadius.circular(AppTheme.radiusMd),
@@ -484,6 +498,28 @@ class _BarcodeScanDialogState extends State<_BarcodeScanDialog> {
             ),
           ),
           AppStyles.gap16,
+          // Read Text button — opens LiveTextScanner
+          SizedBox(
+            width: double.infinity,
+            child: PillButton(
+              label: 'Read Text Instead',
+              icon: Icons.text_fields_rounded,
+              onPressed: () async {
+                _ctrl.stop();
+                final result = await Navigator.of(context).push<String>(
+                  MaterialPageRoute(
+                    builder: (_) => _TextReadScreen(),
+                  ),
+                );
+                if (result != null && context.mounted) {
+                  Navigator.of(context).pop('TEXT:$result');
+                } else {
+                  _ctrl.start();
+                }
+              },
+            ),
+          ),
+          AppStyles.gap8,
           SizedBox(
             width: double.infinity,
             child: PillButton(
@@ -497,3 +533,132 @@ class _BarcodeScanDialogState extends State<_BarcodeScanDialog> {
     );
   }
 }
+
+/// Simple text reading screen using camera + ML Kit
+class _TextReadScreen extends StatefulWidget {
+  @override
+  State<_TextReadScreen> createState() => _TextReadScreenState();
+}
+
+class _TextReadScreenState extends State<_TextReadScreen> {
+  CameraController? _cam;
+  final _textRecognizer = TextRecognizer();
+  bool _ready = false;
+  bool _processing = false;
+  String _detected = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    final cameras = await availableCameras();
+    if (cameras.isEmpty) return;
+    final back = cameras.firstWhere(
+      (c) => c.lensDirection == CameraLensDirection.back,
+      orElse: () => cameras.first,
+    );
+    _cam = CameraController(back, ResolutionPreset.medium,
+        enableAudio: false, imageFormatGroup: ImageFormatGroup.nv21);
+    await _cam!.initialize();
+    if (!mounted) return;
+    setState(() => _ready = true);
+    _cam!.startImageStream(_process);
+  }
+
+  void _process(CameraImage image) async {
+    if (_processing) return;
+    _processing = true;
+    try {
+      final rot = _cam?.description.sensorOrientation ?? 0;
+      final inputRot = InputImageRotationValue.fromRawValue(rot);
+      if (inputRot == null) { _processing = false; return; }
+      final plane = image.planes.first;
+      final input = InputImage.fromBytes(
+        bytes: plane.bytes,
+        metadata: InputImageMetadata(
+          size: Size(image.width.toDouble(), image.height.toDouble()),
+          rotation: inputRot,
+          format: InputImageFormat.nv21,
+          bytesPerRow: plane.bytesPerRow,
+        ),
+      );
+      final result = await _textRecognizer.processImage(input);
+      if (result.text.isNotEmpty && mounted) {
+        setState(() => _detected = result.text.length > 100
+            ? result.text.substring(0, 100)
+            : result.text);
+      }
+    } catch (_) {}
+    await Future.delayed(const Duration(milliseconds: 500));
+    _processing = false;
+  }
+
+  @override
+  void dispose() {
+    _cam?.dispose();
+    _textRecognizer.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.black,
+      appBar: AppBar(
+        backgroundColor: AppTheme.black,
+        foregroundColor: AppTheme.white,
+        title: Text('Read Product Text', style: AppTheme.headlineMd.copyWith(color: AppTheme.white)),
+      ),
+      body: SafeArea(
+        child: Column(children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                child: _ready && _cam != null
+                    ? CameraPreview(_cam!)
+                    : const Center(child: CircularProgressIndicator(color: AppTheme.white)),
+              ),
+            ),
+          ),
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppTheme.white,
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Detected Text:', style: AppTheme.bodyLg.copyWith(fontWeight: FontWeight.w700)),
+                AppStyles.gap8,
+                Text(
+                  _detected.isEmpty ? 'Point camera at product text...' : _detected,
+                  style: AppTheme.bodySm.copyWith(
+                    color: _detected.isEmpty ? AppTheme.outline : AppTheme.black,
+                  ),
+                  maxLines: 3,
+                ),
+                AppStyles.gap16,
+                SizedBox(
+                  width: double.infinity,
+                  child: PillButton(
+                    label: 'Use This Text',
+                    onPressed: _detected.isEmpty ? null : () => Navigator.of(context).pop(_detected),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+

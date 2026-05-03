@@ -20,6 +20,7 @@ dependencies:
 
   # Barcode Scanning
   mobile_scanner: ^6.0.0
+  google_mlkit_barcode_scanning: ^0.13.0
 
   # State Management
   provider: ^6.1.2
@@ -32,9 +33,9 @@ dependencies:
   intl: ^0.20.2
   http: ^1.3.0
 
-  # AI Vision
-  google_generative_ai: ^0.4.6
-  image_picker: ^1.1.2
+  # AI Vision (on-device)
+  google_mlkit_text_recognition: ^0.14.0
+  camera: ^0.11.1
 
 dev_dependencies:
   flutter_test:
