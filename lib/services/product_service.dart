@@ -1,12 +1,9 @@
-import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:uuid/uuid.dart';
 import '../models/product.dart';
 
 class ProductService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
   final Uuid _uuid = const Uuid();
 
   /// Collection reference for products in a store
@@ -55,15 +52,8 @@ class ProductService {
     required int quantity,
     required String barcode,
     required String category,
-    File? imageFile,
   }) async {
     final productId = _uuid.v4();
-    String? imageUrl;
-
-    // Upload image if provided
-    if (imageFile != null) {
-      imageUrl = await _uploadProductImage(storeId, productId, imageFile);
-    }
 
     final product = Product(
       id: productId,
@@ -72,7 +62,6 @@ class ProductService {
       quantityInStock: quantity,
       barcode: barcode,
       category: category,
-      imageUrl: imageUrl,
       storeId: storeId,
     );
 
@@ -81,34 +70,14 @@ class ProductService {
   }
 
   /// Update an existing product
-  Future<void> updateProduct(Product product, {File? newImageFile}) async {
-    String? imageUrl = product.imageUrl;
-
-    if (newImageFile != null) {
-      imageUrl = await _uploadProductImage(
-        product.storeId,
-        product.id,
-        newImageFile,
-      );
-    }
-
-    final updatedProduct = product.copyWith(imageUrl: imageUrl);
+  Future<void> updateProduct(Product product) async {
     await _productsRef(product.storeId)
         .doc(product.id)
-        .update(updatedProduct.toMap());
+        .update(product.toMap());
   }
 
   /// Delete a product
   Future<void> deleteProduct(String storeId, String productId) async {
-    // Delete image from storage if exists
-    try {
-      await _storage
-          .ref('stores/$storeId/products/$productId')
-          .delete();
-    } catch (_) {
-      // Image might not exist, ignore
-    }
-
     await _productsRef(storeId).doc(productId).delete();
   }
 
@@ -121,17 +90,6 @@ class ProductService {
     await _productsRef(storeId).doc(productId).update({
       'quantityInStock': FieldValue.increment(-quantity),
     });
-  }
-
-  /// Upload product image to Firebase Storage
-  Future<String> _uploadProductImage(
-    String storeId,
-    String productId,
-    File imageFile,
-  ) async {
-    final ref = _storage.ref('stores/$storeId/products/$productId.jpg');
-    await ref.putFile(imageFile);
-    return await ref.getDownloadURL();
   }
 
   /// Get all unique categories for a store

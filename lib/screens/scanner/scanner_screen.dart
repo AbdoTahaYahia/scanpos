@@ -13,24 +13,64 @@ import '../../widgets/scan_feedback_overlay.dart';
 import 'package:intl/intl.dart';
 
 class ScannerScreen extends StatefulWidget {
-  const ScannerScreen({super.key});
+  final bool isActive;
+  const ScannerScreen({super.key, this.isActive = true});
 
   @override
   State<ScannerScreen> createState() => _ScannerScreenState();
 }
 
-class _ScannerScreenState extends State<ScannerScreen> {
-  final MobileScannerController _scannerController = MobileScannerController(
-    detectionSpeed: DetectionSpeed.normal,
-    facing: CameraFacing.back,
-  );
+class _ScannerScreenState extends State<ScannerScreen>
+    with WidgetsBindingObserver {
+  late MobileScannerController _scannerController;
   final ProductService _productService = ProductService();
   final _currencyFormat = NumberFormat.currency(symbol: 'EGP ', decimalDigits: 2);
   bool _isProcessingScan = false;
-  bool _showScanner = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _scannerController = MobileScannerController(
+      detectionSpeed: DetectionSpeed.normal,
+      facing: CameraFacing.back,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant ScannerScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      // Tab became active — restart camera
+      _restartCamera();
+    } else if (!widget.isActive && oldWidget.isActive) {
+      // Tab became inactive — stop camera
+      _scannerController.stop();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!widget.isActive) return;
+    if (state == AppLifecycleState.resumed) {
+      _restartCamera();
+    } else if (state == AppLifecycleState.paused) {
+      _scannerController.stop();
+    }
+  }
+
+  Future<void> _restartCamera() async {
+    try {
+      await _scannerController.stop();
+    } catch (_) {}
+    try {
+      await _scannerController.start();
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _scannerController.dispose();
     super.dispose();
   }
@@ -145,38 +185,15 @@ class _ScannerScreenState extends State<ScannerScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // ─── Header ──────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-              child: Row(
-                children: [
-                  Text('Scanner', style: AppTheme.headlineLg),
-                  const Spacer(),
-                  // Toggle scanner
-                  CircleButton.icon(
-                    icon: _showScanner
-                        ? Icons.videocam_off_rounded
-                        : Icons.videocam_rounded,
-                    onPressed: () {
-                      setState(() => _showScanner = !_showScanner);
-                      if (_showScanner) {
-                        _scannerController.start();
-                      } else {
-                        _scannerController.stop();
-                      }
-                    },
-                    size: 48,
-                    filled: _showScanner,
-                  ),
-                ],
-              ),
+              child: Text('Scanner', style: AppTheme.headlineLg),
             ),
 
             AppStyles.gap16,
 
             // ─── Scanner View ────────────────────────────────────
-            if (_showScanner)
-              Padding(
+            Padding(
                 padding: AppStyles.paddingHorizontal,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(AppTheme.radiusMd),

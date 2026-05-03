@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import '../../models/product.dart';
 import '../../providers/inventory_provider.dart';
@@ -194,24 +193,11 @@ class _ProductCard extends StatelessWidget {
               width: 64,
               height: 64,
               color: AppTheme.surfaceContainer,
-              child: product.imageUrl != null
-                  ? CachedNetworkImage(
-                      imageUrl: product.imageUrl!,
-                      fit: BoxFit.cover,
-                      placeholder: (_, _a) => const Icon(
-                        Icons.image_rounded,
-                        color: AppTheme.outline,
-                      ),
-                      errorWidget: (_, _a, _b) => const Icon(
-                        Icons.image_not_supported_rounded,
-                        color: AppTheme.outline,
-                      ),
-                    )
-                  : const Icon(
-                      Icons.inventory_2_rounded,
-                      color: AppTheme.outline,
-                      size: 28,
-                    ),
+              child: const Icon(
+                Icons.inventory_2_rounded,
+                color: AppTheme.outline,
+                size: 28,
+              ),
             ),
           ),
 

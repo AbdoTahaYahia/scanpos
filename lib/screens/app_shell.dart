@@ -37,7 +37,7 @@ class _AppShellState extends State<AppShell> {
     final canManageInventory = user?.canManageInventory ?? false;
 
     final screens = <Widget>[
-      const ScannerScreen(),
+      ScannerScreen(isActive: _currentIndex == 0),
       if (canManageInventory) const InventoryScreen(),
     ];
 
@@ -54,9 +54,6 @@ class _AppShellState extends State<AppShell> {
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           color: AppTheme.white,
-          border: Border(
-            top: BorderSide(color: AppTheme.black, width: 2),
-          ),
         ),
         child: SafeArea(
           child: Padding(
@@ -126,28 +123,15 @@ class _NavItem extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: isSelected ? AppTheme.black : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+          borderRadius: BorderRadius.circular(50),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? AppTheme.white : AppTheme.outline,
-              size: 26,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: AppTheme.labelBold.copyWith(
-                color: isSelected ? AppTheme.white : AppTheme.outline,
-                fontSize: 11,
-              ),
-            ),
-          ],
+        child: Icon(
+          icon,
+          color: isSelected ? AppTheme.white : AppTheme.outline,
+          size: 26,
         ),
       ),
     );

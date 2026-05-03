@@ -5,7 +5,6 @@ class Product {
   final int quantityInStock;
   final String barcode;
   final String category;
-  final String? imageUrl;
   final String storeId;
 
   Product({
@@ -15,7 +14,6 @@ class Product {
     required this.quantityInStock,
     required this.barcode,
     required this.category,
-    this.imageUrl,
     required this.storeId,
   });
 
@@ -26,7 +24,6 @@ class Product {
     int? quantityInStock,
     String? barcode,
     String? category,
-    String? imageUrl,
     String? storeId,
   }) {
     return Product(
@@ -36,7 +33,6 @@ class Product {
       quantityInStock: quantityInStock ?? this.quantityInStock,
       barcode: barcode ?? this.barcode,
       category: category ?? this.category,
-      imageUrl: imageUrl ?? this.imageUrl,
       storeId: storeId ?? this.storeId,
     );
   }
@@ -49,7 +45,6 @@ class Product {
       'quantityInStock': quantityInStock,
       'barcode': barcode,
       'category': category,
-      'imageUrl': imageUrl,
       'storeId': storeId,
     };
   }
@@ -62,7 +57,6 @@ class Product {
       quantityInStock: map['quantityInStock'] as int,
       barcode: map['barcode'] as String,
       category: map['category'] as String,
-      imageUrl: map['imageUrl'] as String?,
       storeId: map['storeId'] as String,
     );
   }
