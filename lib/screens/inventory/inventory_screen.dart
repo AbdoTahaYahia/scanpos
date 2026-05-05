@@ -42,7 +42,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
   @override
   Widget build(BuildContext context) {
     final inventoryProvider = context.watch<InventoryProvider>();
-    final currencyFormat = NumberFormat.currency(symbol: 'EGP ', decimalDigits: 2);
+    final currencyFormat = NumberFormat.currency(
+      symbol: 'EGP ',
+      decimalDigits: 2,
+    );
 
     return Scaffold(
       body: SafeArea(
@@ -62,10 +65,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
               padding: AppStyles.paddingHorizontal,
               child: PillInput(
                 hint: 'Search by name or barcode...',
-                prefixIcon: const Icon(Icons.search_rounded,
-                    color: AppTheme.outline, size: 22),
-                onChanged: (query) =>
-                    inventoryProvider.setSearchQuery(query),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  color: AppTheme.outline,
+                  size: 22,
+                ),
+                onChanged: (query) => inventoryProvider.setSearchQuery(query),
               ),
             ),
 
@@ -84,19 +89,16 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     if (index == 0) {
                       return ProductChip(
                         label: 'All',
-                        isSelected:
-                            inventoryProvider.selectedCategory == null,
+                        isSelected: inventoryProvider.selectedCategory == null,
                         onTap: () => inventoryProvider.setCategory(null),
                       );
                     }
-                    final category =
-                        inventoryProvider.categories[index - 1];
+                    final category = inventoryProvider.categories[index - 1];
                     return ProductChip(
                       label: category,
                       isSelected:
                           inventoryProvider.selectedCategory == category,
-                      onTap: () =>
-                          inventoryProvider.setCategory(category),
+                      onTap: () => inventoryProvider.setCategory(category),
                     );
                   },
                 ),
@@ -121,39 +123,41 @@ class _InventoryScreenState extends State<InventoryScreen> {
             Expanded(
               child: inventoryProvider.isLoading
                   ? const Center(
-                      child: CircularProgressIndicator(
-                        color: AppTheme.black,
-                      ),
+                      child: CircularProgressIndicator(color: AppTheme.black),
                     )
                   : inventoryProvider.products.isEmpty
-                      ? _buildEmptyState()
-                      : RefreshIndicator(
-                          color: AppTheme.black,
-                          backgroundColor: AppTheme.white,
-                          onRefresh: () => inventoryProvider.refreshProducts(),
-                          child: ListView.separated(
-                            controller: _scrollController,
-                            padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
-                            // Add 1 to itemCount if fetching more to show spinner
-                            itemCount: inventoryProvider.products.length + (inventoryProvider.isFetchingMore ? 1 : 0),
-                            separatorBuilder: (_, _a) => AppStyles.gap12,
-                            itemBuilder: (context, index) {
-                              if (index == inventoryProvider.products.length) {
-                                return const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 16),
-                                  child: Center(
-                                    child: CircularProgressIndicator(color: AppTheme.black),
-                                  ),
-                                );
-                              }
-                              final product = inventoryProvider.products[index];
-                              return _ProductCard(
-                                product: product,
-                                currencyFormat: currencyFormat,
-                              );
-                            },
-                          ),
-                        ),
+                  ? _buildEmptyState()
+                  : RefreshIndicator(
+                      color: AppTheme.black,
+                      backgroundColor: AppTheme.white,
+                      onRefresh: () => inventoryProvider.refreshProducts(),
+                      child: ListView.separated(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
+                        // Add 1 to itemCount if fetching more to show spinner
+                        itemCount:
+                            inventoryProvider.products.length +
+                            (inventoryProvider.isFetchingMore ? 1 : 0),
+                        separatorBuilder: (_, _a) => AppStyles.gap12,
+                        itemBuilder: (context, index) {
+                          if (index == inventoryProvider.products.length) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  color: AppTheme.black,
+                                ),
+                              ),
+                            );
+                          }
+                          final product = inventoryProvider.products[index];
+                          return _ProductCard(
+                            product: product,
+                            currencyFormat: currencyFormat,
+                          );
+                        },
+                      ),
+                    ),
             ),
           ],
         ),
@@ -161,11 +165,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
       // ─── FAB ───────────────────────────────────────────────────
       floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => const AddEditProductScreen(),
-          ),
-        ),
+        onPressed: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const AddEditProductScreen())),
         child: const Icon(Icons.add_rounded, size: 32),
       ),
     );
@@ -210,10 +212,7 @@ class _ProductCard extends StatelessWidget {
   final Product product;
   final NumberFormat currencyFormat;
 
-  const _ProductCard({
-    required this.product,
-    required this.currencyFormat,
-  });
+  const _ProductCard({required this.product, required this.currencyFormat});
 
   @override
   Widget build(BuildContext context) {
@@ -250,9 +249,7 @@ class _ProductCard extends StatelessWidget {
               children: [
                 Text(
                   product.name,
-                  style: AppTheme.bodyLg.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: AppTheme.bodyLg.copyWith(fontWeight: FontWeight.w700),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -267,8 +264,9 @@ class _ProductCard extends StatelessWidget {
                         ),
                         decoration: BoxDecoration(
                           color: AppTheme.surfaceContainer,
-                          borderRadius:
-                              BorderRadius.circular(AppTheme.radiusFull),
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusFull,
+                          ),
                         ),
                         child: Text(
                           product.category,
@@ -291,8 +289,9 @@ class _ProductCard extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: AppTheme.surfaceContainerHigh,
-                            borderRadius:
-                                BorderRadius.circular(AppTheme.radiusFull),
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.radiusFull,
+                            ),
                           ),
                           child: Text(
                             product.size!,
@@ -327,9 +326,7 @@ class _ProductCard extends StatelessWidget {
           // Price
           Text(
             currencyFormat.format(product.price),
-            style: AppTheme.bodyLg.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+            style: AppTheme.bodyLg.copyWith(fontWeight: FontWeight.w700),
           ),
         ],
       ),

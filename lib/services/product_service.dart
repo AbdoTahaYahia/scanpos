@@ -64,6 +64,12 @@ class ProductService {
     return Product.fromMap(query.docs.first.data());
   }
 
+  /// Get all products for search/OCR purposes (bypasses pagination)
+  Future<List<Product>> getAllProducts(String storeId) async {
+    final snapshot = await _productsRef(storeId).get();
+    return snapshot.docs.map((doc) => Product.fromMap(doc.data())).toList();
+  }
+
   /// Get a single product by ID
   Future<Product?> getProductById(String storeId, String productId) async {
     final doc = await _productsRef(storeId).doc(productId).get();

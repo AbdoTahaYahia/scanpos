@@ -196,7 +196,7 @@ class _ScannerScreenState extends State<ScannerScreen>
   }
 
   void _handleDetectedText(String fullText, List<TextBlock> blocks) {
-    final products = context.read<InventoryProvider>().products;
+    final products = context.read<InventoryProvider>().allProducts;
     if (products.isEmpty) return;
 
     final textLower = fullText.toLowerCase();
@@ -409,8 +409,8 @@ class _ScannerScreenState extends State<ScannerScreen>
                     return const Iterable<Product>.empty();
                   }
                   final query = textEditingValue.text.toLowerCase();
-                  // We need to access inventory provider safely.
-                  final products = context.read<InventoryProvider>().products;
+                  // Access full catalog for searching
+                  final products = context.read<InventoryProvider>().allProducts;
                   
                   // Return up to 3 matches
                   return products
