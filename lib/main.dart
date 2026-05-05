@@ -17,8 +17,14 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  // Initialize Remote Config — securely fetches API keys from Firebase
-  await RemoteConfigService.instance.init();
+  // Initialize Remote Config — must complete before app starts
+  // so the Gemini API key is available for barcode lookup
+  try {
+    await RemoteConfigService.instance.init().timeout(
+      const Duration(seconds: 5),
+      onTimeout: () => debugPrint('[RemoteConfig] Timeout — starting without it'),
+    );
+  } catch (_) {}
   runApp(const ScanPosApp());
 }
 

@@ -3,198 +3,151 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'remote_config_service.dart';
 
-/// Result from barcode lookup containing product info from the internet.
+/// Result from barcode lookup containing product info.
 class BarcodeLookupResult {
   final String name;
   final String? category;
   final String? brand;
+  final double? price;
 
   const BarcodeLookupResult({
     required this.name,
     this.category,
     this.brand,
+    this.price,
   });
 }
 
-/// Service that looks up product information from online databases
-/// using the barcode number.
-///
-/// Supports multiple providers:
-/// - **Open Food Facts** (default, free, no API key)
-/// - **UPC Item DB** (API key from Firebase Remote Config)
-/// - **Barcode Lookup** (API key from Firebase Remote Config)
-///
-/// API keys are fetched securely from Firebase Remote Config,
-/// never hardcoded in the app.
+/// Service that uses Gemini AI to identify products by barcode.
+/// The API key is fetched securely from Firebase Remote Config.
 class BarcodeLookupService {
   final RemoteConfigService _config = RemoteConfigService.instance;
 
-  /// Look up product info by barcode — automatically selects
-  /// the right API based on Remote Config settings.
+  /// Look up product info by barcode using Gemini AI.
   Future<BarcodeLookupResult?> lookupBarcode(String barcode) async {
-    // Check if a paid API is configured via Remote Config
-    if (_config.hasPaidBarcodeApi) {
-      final provider = _config.barcodeLookupProvider;
-      final apiKey = _config.barcodeLookupApiKey;
-
-      switch (provider) {
-        case 'upcitemdb':
-          return _lookupUpcItemDb(barcode, apiKey);
-        case 'barcodelookup':
-          return _lookupBarcodeLookupApi(barcode, apiKey);
-        default:
-          // Unknown provider — fallback to free API
-          break;
-      }
+    String geminiKey = '';
+    try {
+      geminiKey = _config.getString('gemini_api_key');
+      debugPrint('[BarcodeLookup] Key loaded: ${geminiKey.isNotEmpty ? "YES (${geminiKey.substring(0, 10)}...)" : "EMPTY"}');
+    } catch (e) {
+      debugPrint('[BarcodeLookup] Failed to read key: $e');
     }
 
-    // Default: use free Open Food Facts API (no key needed)
-    return _lookupOpenFoodFacts(barcode);
-  }
-
-  // ─── Open Food Facts (Free, No Key) ─────────────────────────────
-
-  static const _offBaseUrl = 'https://world.openfoodfacts.org/api/v2/product';
-
-  Future<BarcodeLookupResult?> _lookupOpenFoodFacts(String barcode) async {
-    try {
-      final url = Uri.parse(
-          '$_offBaseUrl/$barcode?fields=product_name,product_name_ar,brands,categories');
-      final response = await http.get(
-        url,
-        headers: {
-          'User-Agent': 'ScanPos/1.0 (Flutter POS App)',
-        },
-      ).timeout(const Duration(seconds: 8));
-
-      if (response.statusCode != 200) return null;
-
-      final data = json.decode(response.body);
-      if (data['status'] != 1) return null;
-
-      final product = data['product'] as Map<String, dynamic>?;
-      if (product == null) return null;
-
-      // Try Arabic name first, then English
-      final name =
-          (product['product_name_ar'] as String?)?.trim().isNotEmpty == true
-              ? product['product_name_ar'] as String
-              : (product['product_name'] as String?) ?? '';
-
-      if (name.isEmpty) return null;
-
-      // Build display name with brand
-      final brand = (product['brands'] as String?)?.trim();
-      final displayName =
-          brand != null && brand.isNotEmpty && !name.contains(brand)
-              ? '$name - $brand'
-              : name;
-
-      // Get first category
-      final categoriesRaw = product['categories'] as String?;
-      String? category;
-      if (categoriesRaw != null && categoriesRaw.isNotEmpty) {
-        final cats = categoriesRaw
-            .split(',')
-            .map((c) => c.trim())
-            .where((c) => c.isNotEmpty)
-            .toList();
-        if (cats.isNotEmpty) {
-          category = cats.first;
-          if (category.contains(':')) {
-            category = category.split(':').last.trim();
-          }
-          if (category.isNotEmpty) {
-            category = category[0].toUpperCase() + category.substring(1);
-          }
-        }
-      }
-
-      return BarcodeLookupResult(
-        name: displayName,
-        category: category,
-        brand: brand,
-      );
-    } catch (e) {
-      debugPrint('[BarcodeLookup] OpenFoodFacts error: $e');
+    if (geminiKey.isEmpty) {
+      debugPrint('[BarcodeLookup] ❌ No Gemini API key — make sure Remote Config has "gemini_api_key" published');
       return null;
     }
-  }
 
-  // ─── UPC Item DB (Paid, API Key from Remote Config) ─────────────
+    debugPrint('[BarcodeLookup] 🤖 Looking up $barcode with Gemini AI...');
 
-  Future<BarcodeLookupResult?> _lookupUpcItemDb(
-      String barcode, String apiKey) async {
-    try {
-      final url = Uri.parse('https://api.upcitemdb.com/prod/trial/lookup?upc=$barcode');
-      final response = await http.get(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'user_key': apiKey,
-          'key_type': '3scale',
-        },
-      ).timeout(const Duration(seconds: 8));
-
-      if (response.statusCode != 200) {
-        // Fallback to free API
-        return _lookupOpenFoodFacts(barcode);
-      }
-
-      final data = json.decode(response.body);
-      final items = data['items'] as List<dynamic>?;
-      if (items == null || items.isEmpty) return null;
-
-      final item = items.first as Map<String, dynamic>;
-      final title = (item['title'] as String?)?.trim() ?? '';
-      if (title.isEmpty) return null;
-
-      final brand = (item['brand'] as String?)?.trim();
-      final category = (item['category'] as String?)?.trim();
-
-      return BarcodeLookupResult(
-        name: title,
-        category: category,
-        brand: brand,
-      );
-    } catch (e) {
-      debugPrint('[BarcodeLookup] UPCItemDB error: $e — falling back to OFF');
-      return _lookupOpenFoodFacts(barcode);
-    }
-  }
-
-  // ─── Barcode Lookup API (Paid, API Key from Remote Config) ──────
-
-  Future<BarcodeLookupResult?> _lookupBarcodeLookupApi(
-      String barcode, String apiKey) async {
     try {
       final url = Uri.parse(
-          'https://api.barcodelookup.com/v3/products?barcode=$barcode&formatted=y&key=$apiKey');
-      final response = await http.get(url).timeout(const Duration(seconds: 8));
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=$geminiKey');
+
+      final prompt = '''
+You are a product identification expert. Given a barcode number, identify the product.
+
+Barcode: $barcode
+
+Return ONLY a valid JSON object (no markdown, no code blocks) with these fields:
+- "name": Product name (Arabic name if it's commonly known in Arabic, otherwise English)
+- "price": Estimated average retail price in Egyptian Pounds (EGP) as a number (no currency symbol). If unknown, use null.
+- "category": Product category in English (e.g. "Food", "Beverages", "Skincare", "Electronics", "Toys", "Cleaning", "Dairy", "Snacks")
+- "brand": Brand name if known, otherwise null
+
+Example response:
+{"name": "بيبسي 330 مل", "price": 15, "category": "Beverages", "brand": "Pepsi"}
+
+If you cannot identify the product at all, return exactly: null
+''';
+
+      var response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'contents': [
+            {
+              'parts': [
+                {'text': prompt}
+              ]
+            }
+          ],
+          'generationConfig': {
+            'temperature': 0.1,
+            'maxOutputTokens': 256,
+          },
+        }),
+      ).timeout(const Duration(seconds: 12));
+
+      // Handle rate limiting — wait and retry once
+      if (response.statusCode == 429) {
+        debugPrint('[Gemini] ⏳ Rate limited — waiting 5s and retrying...');
+        await Future.delayed(const Duration(seconds: 5));
+        response = await http.post(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({
+            'contents': [
+              {
+                'parts': [
+                  {'text': prompt}
+                ]
+              }
+            ],
+            'generationConfig': {
+              'temperature': 0.1,
+              'maxOutputTokens': 256,
+            },
+          }),
+        ).timeout(const Duration(seconds: 12));
+      }
 
       if (response.statusCode != 200) {
-        return _lookupOpenFoodFacts(barcode);
+        debugPrint('[Gemini] HTTP ${response.statusCode}');
+        return null;
       }
 
       final data = json.decode(response.body);
-      final products = data['products'] as List<dynamic>?;
-      if (products == null || products.isEmpty) return null;
+      final candidates = data['candidates'] as List<dynamic>?;
+      if (candidates == null || candidates.isEmpty) return null;
 
-      final product = products.first as Map<String, dynamic>;
-      final title = (product['title'] as String?)?.trim() ?? '';
-      if (title.isEmpty) return null;
+      final content = candidates.first['content'] as Map<String, dynamic>?;
+      final parts = content?['parts'] as List<dynamic>?;
+      if (parts == null || parts.isEmpty) return null;
 
-      final brand = (product['brand'] as String?)?.trim();
-      final category = (product['category'] as String?)?.trim();
+      var text = (parts.first['text'] as String?)?.trim() ?? '';
+      if (text.isEmpty || text == 'null') return null;
+
+      // Clean up: remove markdown code blocks if present
+      text = text
+          .replaceAll(RegExp(r'^```json\s*', multiLine: true), '')
+          .replaceAll(RegExp(r'^```\s*', multiLine: true), '')
+          .trim();
+
+      if (text == 'null') return null;
+
+      final productData = json.decode(text) as Map<String, dynamic>;
+
+      final name = (productData['name'] as String?)?.trim() ?? '';
+      if (name.isEmpty) return null;
+
+      final brand = (productData['brand'] as String?)?.trim();
+      final category = (productData['category'] as String?)?.trim();
+      final price = productData['price'] != null
+          ? (productData['price'] as num).toDouble()
+          : null;
+
+      debugPrint('[Gemini] ✅ Found: $name (${price != null ? "EGP $price" : "no price"})');
 
       return BarcodeLookupResult(
-        name: title,
+        name: name,
         category: category,
         brand: brand,
+        price: price,
       );
     } catch (e) {
-      debugPrint('[BarcodeLookup] BarcodeLookup API error: $e — falling back to OFF');
-      return _lookupOpenFoodFacts(barcode);
+      debugPrint('[Gemini] Error: $e');
+      return null;
     }
   }
 }

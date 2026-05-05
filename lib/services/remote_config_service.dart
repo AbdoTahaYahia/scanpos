@@ -24,7 +24,8 @@ class RemoteConfigService {
       // Set defaults (used when no value exists in Remote Config yet)
       await _remoteConfig.setDefaults({
         _barcodeLookupApiKey: '',
-        _barcodeLookupProvider: 'openfoodfacts', // free, no key needed
+        _barcodeLookupProvider: 'openfoodfacts',
+        'gemini_api_key': '',
       });
 
       // Configure fetch settings

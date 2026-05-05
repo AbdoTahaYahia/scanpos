@@ -75,7 +75,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
       } else {
         // Barcode scanned
         _barcodeCtrl.text = result;
-        // Auto-lookup product info from the internet
+        // First check local inventory, then internet
         await _lookupProductInfo(result);
       }
     }
@@ -87,42 +87,149 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
       _lookupStatus = null;
     });
 
-    final result = await _lookupService.lookupBarcode(barcode);
+    debugPrint('[AddProduct] Starting lookup for barcode: $barcode');
 
-    if (!mounted) return;
+    final storeId = context.read<AuthProvider>().appUser?.storeId;
 
-    if (result != null) {
-      // Auto-fill the form fields
-      if (_nameCtrl.text.isEmpty) {
-        _nameCtrl.text = result.name;
+    // ─── Step 1: Check local inventory first ───────────────────
+    if (storeId != null) {
+      try {
+        final existing = await _productService.getProductByBarcode(storeId, barcode);
+        debugPrint('[AddProduct] Local inventory check: ${existing != null ? "FOUND" : "not found"}');
+
+        if (existing != null && mounted) {
+          setState(() {
+            _isLookingUp = false;
+            _lookupStatus = '📦 Already in inventory!';
+          });
+
+          final action = await showDialog<String>(
+            context: context,
+            builder: (ctx) => Dialog(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Container(
+                    width: 64, height: 64,
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceContainer,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(Icons.inventory_2_rounded, size: 32, color: AppTheme.black),
+                  ),
+                  AppStyles.gap16,
+                  Text('Product Exists!', style: AppTheme.headlineMd),
+                  AppStyles.gap8,
+                  Text(
+                    '"${existing.name}" is already in your inventory with ${existing.quantityInStock} in stock.',
+                    style: AppTheme.bodySm.copyWith(color: AppTheme.onSurfaceVariant),
+                    textAlign: TextAlign.center,
+                  ),
+                  AppStyles.gap24,
+                  SizedBox(
+                    width: double.infinity,
+                    child: PillButton(
+                      label: 'Edit Existing Product',
+                      icon: Icons.edit_rounded,
+                      onPressed: () => Navigator.pop(ctx, 'edit'),
+                    ),
+                  ),
+                  AppStyles.gap12,
+                  SizedBox(
+                    width: double.infinity,
+                    child: PillButton(
+                      label: 'Use Info for New Product',
+                      variant: PillButtonVariant.secondary,
+                      onPressed: () => Navigator.pop(ctx, 'fill'),
+                    ),
+                  ),
+                  AppStyles.gap8,
+                  SizedBox(
+                    width: double.infinity,
+                    child: PillButton(
+                      label: 'Cancel',
+                      variant: PillButtonVariant.secondary,
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+          );
+
+          if (!mounted) return;
+
+          if (action == 'edit') {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (_) => AddEditProductScreen(product: existing),
+              ),
+            );
+            return;
+          } else if (action == 'fill') {
+            _nameCtrl.text = existing.name;
+            _priceCtrl.text = existing.price.toString();
+            _categoryCtrl.text = existing.category;
+            setState(() => _lookupStatus = '✅ Filled from inventory');
+          }
+
+          Future.delayed(const Duration(seconds: 4), () {
+            if (mounted) setState(() => _lookupStatus = null);
+          });
+          return;
+        }
+      } catch (e) {
+        debugPrint('[AddProduct] ⚠️ Local inventory check failed: $e');
       }
-      if (_categoryCtrl.text.isEmpty && result.category != null) {
-        _categoryCtrl.text = result.category!;
-      }
-
-      setState(() {
-        _isLookingUp = false;
-        _lookupStatus = '✅ Found: ${result.name}';
-      });
-
-      // Show a snackbar
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Product found! Review and edit the details.'),
-            backgroundColor: AppTheme.black,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-    } else {
-      setState(() {
-        _isLookingUp = false;
-        _lookupStatus = '⚠️ Not found online — fill manually';
-      });
     }
 
-    // Clear status after a few seconds
+    // ─── Step 2: Not in inventory — search online with Gemini ──
+    debugPrint('[AddProduct] Searching online...');
+    try {
+      final result = await _lookupService.lookupBarcode(barcode);
+      debugPrint('[AddProduct] Online result: ${result != null ? "FOUND: ${result.name}" : "null"}');
+
+      if (!mounted) return;
+
+      if (result != null) {
+        _nameCtrl.text = result.name;
+        if (result.category != null) {
+          _categoryCtrl.text = result.category!;
+        }
+        if (result.price != null && _priceCtrl.text.isEmpty) {
+          _priceCtrl.text = result.price!.toStringAsFixed(2);
+        }
+
+        setState(() {
+          _isLookingUp = false;
+          _lookupStatus = '✅ Found: ${result.name}';
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Product found! Review and edit the details.'),
+              backgroundColor: AppTheme.black,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        setState(() {
+          _isLookingUp = false;
+          _lookupStatus = '⚠️ Not found — fill manually';
+        });
+      }
+    } catch (e) {
+      debugPrint('[AddProduct] ⚠️ Online lookup failed: $e');
+      if (mounted) {
+        setState(() {
+          _isLookingUp = false;
+          _lookupStatus = '⚠️ Error — fill manually';
+        });
+      }
+    }
+
     Future.delayed(const Duration(seconds: 4), () {
       if (mounted) setState(() => _lookupStatus = null);
     });
