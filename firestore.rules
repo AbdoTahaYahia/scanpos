@@ -1,0 +1,83 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helper Functions ─────────────────────────────────────────
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isStoreManager(storeId) {
+      let userData = getUserData();
+      return userData.storeId == storeId && userData.role == 'manager';
+    }
+
+    function isStoreMember(storeId) {
+      let userData = getUserData();
+      return userData.storeId == storeId && userData.role in ['manager', 'employee'];
+    }
+
+    function hasRole(storeId, role) {
+      let userData = getUserData();
+      return userData.storeId == storeId && (
+        userData.role == 'manager' || role in userData.roles
+      );
+    }
+
+    // ─── Users Collection ─────────────────────────────────────────
+    // Users can read/write their own document
+    // Store managers can read employees of their store
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (
+        isOwner(userId) ||
+        (resource.data.storeId != null && isStoreManager(resource.data.storeId))
+      );
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow update: if isAuthenticated() && (
+        isOwner(userId) ||
+        isStoreManager(resource.data.storeId)
+      );
+      allow delete: if false; // No user deletion from client
+    }
+
+    // ─── Stores Collection ────────────────────────────────────────
+    match /stores/{storeId} {
+      // Any authenticated user can read a store (needed for invite code lookup)
+      allow read: if isAuthenticated();
+      // Only the manager can create/update their store
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && isStoreManager(storeId);
+      allow delete: if false;
+
+      // ─── Products Sub-collection ──────────────────────────────
+      match /products/{productId} {
+        // Store members can read products
+        allow read: if isAuthenticated() && isStoreMember(storeId);
+        // Manager and warehouse roles can write products
+        allow create, update: if isAuthenticated() && (
+          isStoreManager(storeId) || hasRole(storeId, 'warehouse')
+        );
+        allow delete: if isAuthenticated() && isStoreManager(storeId);
+      }
+
+      // ─── Transactions Sub-collection ──────────────────────────
+      match /transactions/{transactionId} {
+        // Store members can read transactions
+        allow read: if isAuthenticated() && isStoreMember(storeId);
+        // Cashier and manager can create transactions
+        allow create: if isAuthenticated() && (
+          isStoreManager(storeId) || hasRole(storeId, 'cashier')
+        );
+        allow update, delete: if false; // Transactions are immutable
+      }
+    }
+  }
+}

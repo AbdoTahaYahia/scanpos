@@ -6,6 +6,7 @@ import 'theme/app_theme.dart';
 import 'providers/auth_provider.dart';
 import 'providers/cart_provider.dart';
 import 'providers/inventory_provider.dart';
+import 'services/remote_config_service.dart';
 import 'screens/auth/sign_in_screen.dart';
 import 'screens/auth/role_selection_screen.dart';
 import 'screens/auth/pending_approval_screen.dart';
@@ -16,6 +17,8 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  // Initialize Remote Config — securely fetches API keys from Firebase
+  await RemoteConfigService.instance.init();
   runApp(const ScanPosApp());
 }
 

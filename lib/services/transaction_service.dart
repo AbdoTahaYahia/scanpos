@@ -89,6 +89,25 @@ class TransactionService {
     });
   }
 
+  /// Fetch a page of transactions (cursor-based pagination).
+  /// Returns the raw QuerySnapshot so the caller can use the last
+  /// document as a cursor for the next page.
+  Future<QuerySnapshot<Map<String, dynamic>>> getTransactionsPaginated(
+    String storeId, {
+    int limit = 10,
+    DocumentSnapshot? startAfter,
+  }) {
+    Query<Map<String, dynamic>> query = _transactionsRef(storeId)
+        .orderBy('timestamp', descending: true)
+        .limit(limit);
+
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+
+    return query.get();
+  }
+
   /// Get a single transaction by ID
   Future<SaleTransaction?> getTransaction(
     String storeId,

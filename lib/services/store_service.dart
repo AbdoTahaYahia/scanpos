@@ -83,11 +83,26 @@ class StoreService {
     });
   }
 
-  /// Update an employee's role
-  Future<void> updateEmployeeRole(String userId, String newRole) async {
+  /// Update an employee's roles (multi-role support)
+  Future<void> updateEmployeeRoles(String userId, List<String> roles) async {
     await _firestore.collection('users').doc(userId).update({
-      'role': newRole,
+      'role': 'employee',
+      'roles': roles,
     });
+  }
+
+  /// Toggle a single role on/off for an employee
+  Future<void> toggleEmployeeRole(String userId, String role, bool enabled) async {
+    if (enabled) {
+      await _firestore.collection('users').doc(userId).update({
+        'role': 'employee',
+        'roles': FieldValue.arrayUnion([role]),
+      });
+    } else {
+      await _firestore.collection('users').doc(userId).update({
+        'roles': FieldValue.arrayRemove([role]),
+      });
+    }
   }
 
   /// Remove an employee from the store
@@ -95,6 +110,7 @@ class StoreService {
     await _firestore.collection('users').doc(userId).update({
       'storeId': null,
       'role': 'pending',
+      'roles': [],
     });
   }
 }
