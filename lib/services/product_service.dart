@@ -2,6 +2,18 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
 import '../models/product.dart';
 
+class PaginatedProducts {
+  final List<Product> products;
+  final DocumentSnapshot? lastDoc;
+  final bool hasMore;
+
+  PaginatedProducts({
+    required this.products,
+    required this.lastDoc,
+    required this.hasMore,
+  });
+}
+
 class ProductService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final Uuid _uuid = const Uuid();
@@ -14,16 +26,31 @@ class ProductService {
         .collection('products');
   }
 
-  /// Stream all products for a store
-  Stream<List<Product>> getProducts(String storeId) {
-    return _productsRef(storeId)
+  /// Fetch paginated products for a store
+  Future<PaginatedProducts> getProductsPaginated({
+    required String storeId,
+    DocumentSnapshot? lastDoc,
+    int limit = 20,
+  }) async {
+    Query<Map<String, dynamic>> query = _productsRef(storeId)
         .orderBy('name')
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => Product.fromMap(doc.data()))
-          .toList();
-    });
+        .limit(limit);
+
+    if (lastDoc != null) {
+      query = query.startAfterDocument(lastDoc);
+    }
+
+    final snapshot = await query.get();
+    
+    final products = snapshot.docs
+        .map((doc) => Product.fromMap(doc.data()))
+        .toList();
+
+    return PaginatedProducts(
+      products: products,
+      lastDoc: snapshot.docs.isNotEmpty ? snapshot.docs.last : null,
+      hasMore: snapshot.docs.length == limit,
+    );
   }
 
   /// Get a single product by barcode
@@ -52,6 +79,7 @@ class ProductService {
     required int quantity,
     required String barcode,
     required String category,
+    String? size,
   }) async {
     final productId = _uuid.v4();
 
@@ -63,6 +91,7 @@ class ProductService {
       barcode: barcode,
       category: category,
       storeId: storeId,
+      size: size,
     );
 
     await _productsRef(storeId).doc(productId).set(product.toMap());

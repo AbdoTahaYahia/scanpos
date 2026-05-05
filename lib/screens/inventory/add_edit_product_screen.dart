@@ -5,6 +5,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:provider/provider.dart';
 import '../../models/product.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/inventory_provider.dart';
 import '../../services/product_service.dart';
 import '../../services/barcode_lookup_service.dart';
 import '../../theme/app_theme.dart';
@@ -32,6 +33,8 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   late final TextEditingController _qtyCtrl;
   late final TextEditingController _barcodeCtrl;
   late final TextEditingController _categoryCtrl;
+  late final TextEditingController _sizeCtrl;
+  late final FocusNode _categoryFocusNode;
 
   bool _isSaving = false;
   bool _isLookingUp = false;
@@ -49,6 +52,8 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     );
     _barcodeCtrl = TextEditingController(text: widget.product?.barcode);
     _categoryCtrl = TextEditingController(text: widget.product?.category);
+    _sizeCtrl = TextEditingController(text: widget.product?.size);
+    _categoryFocusNode = FocusNode();
   }
 
   @override
@@ -58,6 +63,8 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     _qtyCtrl.dispose();
     _barcodeCtrl.dispose();
     _categoryCtrl.dispose();
+    _sizeCtrl.dispose();
+    _categoryFocusNode.dispose();
     super.dispose();
   }
 
@@ -247,6 +254,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           quantityInStock: int.parse(_qtyCtrl.text.trim()),
           barcode: _barcodeCtrl.text.trim(),
           category: _categoryCtrl.text.trim(),
+          size: _sizeCtrl.text.trim().isEmpty ? null : _sizeCtrl.text.trim(),
         );
         await _productService.updateProduct(updated);
       } else {
@@ -257,6 +265,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           quantity: int.parse(_qtyCtrl.text.trim()),
           barcode: _barcodeCtrl.text.trim(),
           category: _categoryCtrl.text.trim(),
+          size: _sizeCtrl.text.trim().isEmpty ? null : _sizeCtrl.text.trim(),
         );
       }
       if (mounted) Navigator.of(context).pop();
@@ -525,13 +534,81 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                     ),
                     AppStyles.gap16,
 
-                    // ─── Category ──────────────────────────────────
+                    // ─── Category (Autocomplete) ───────────────────
+                    RawAutocomplete<String>(
+                      textEditingController: _categoryCtrl,
+                      focusNode: _categoryFocusNode,
+                      optionsBuilder: (TextEditingValue textEditingValue) {
+                        final categories = context.read<InventoryProvider>().categories;
+                        if (textEditingValue.text.isEmpty) {
+                          return categories;
+                        }
+                        return categories.where((option) {
+                          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+                        });
+                      },
+                      onSelected: (String selection) {
+                        _categoryCtrl.text = selection;
+                      },
+                      fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                        return PillInput(
+                          label: 'Category',
+                          hint: 'e.g. Dairy, Beverages',
+                          controller: controller,
+                          focusNode: focusNode,
+                          textInputAction: TextInputAction.done,
+                          validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                          onSubmitted: (v) => onEditingComplete(),
+                        );
+                      },
+                      optionsViewBuilder: (context, onSelected, options) {
+                        return Align(
+                          alignment: Alignment.topLeft,
+                          child: Material(
+                            elevation: 4,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            color: Colors.transparent,
+                            child: Container(
+                              margin: const EdgeInsets.only(top: 8, right: 48), // Match padding
+                              constraints: const BoxConstraints(maxHeight: 200),
+                              decoration: BoxDecoration(
+                                color: AppTheme.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: AppTheme.black, width: 2),
+                              ),
+                              child: ListView.builder(
+                                padding: EdgeInsets.zero,
+                                shrinkWrap: true,
+                                itemCount: options.length,
+                                itemBuilder: (context, index) {
+                                  final option = options.elementAt(index);
+                                  return InkWell(
+                                    onTap: () => onSelected(option),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 12,
+                                      ),
+                                      child: Text(option, style: AppTheme.bodyLg),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    AppStyles.gap16,
+
+                    // ─── Size/Weight (Optional) ─────────────────────
                     PillInput(
-                      label: 'Category',
-                      hint: 'e.g. Dairy, Beverages',
-                      controller: _categoryCtrl,
+                      label: 'Weight / Size / Capacity (Optional)',
+                      hint: 'e.g. 1KG, 500ml, Large',
+                      controller: _sizeCtrl,
                       textInputAction: TextInputAction.done,
-                      validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
                     ),
                     AppStyles.gap32,
 

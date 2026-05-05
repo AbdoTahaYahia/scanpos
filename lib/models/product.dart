@@ -6,6 +6,7 @@ class Product {
   final String barcode;
   final String category;
   final String storeId;
+  final String? size;
 
   Product({
     required this.id,
@@ -15,6 +16,7 @@ class Product {
     required this.barcode,
     required this.category,
     required this.storeId,
+    this.size,
   });
 
   Product copyWith({
@@ -25,6 +27,7 @@ class Product {
     String? barcode,
     String? category,
     String? storeId,
+    String? size,
   }) {
     return Product(
       id: id ?? this.id,
@@ -34,6 +37,7 @@ class Product {
       barcode: barcode ?? this.barcode,
       category: category ?? this.category,
       storeId: storeId ?? this.storeId,
+      size: size ?? this.size,
     );
   }
 
@@ -46,6 +50,7 @@ class Product {
       'barcode': barcode,
       'category': category,
       'storeId': storeId,
+      'size': size,
     };
   }
 
@@ -58,6 +63,7 @@ class Product {
       barcode: map['barcode'] as String,
       category: map['category'] as String,
       storeId: map['storeId'] as String,
+      size: map['size'] as String?,
     );
   }
 }

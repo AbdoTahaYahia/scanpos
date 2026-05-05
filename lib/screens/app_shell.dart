@@ -20,13 +20,13 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
-    // Start listening to products
+    // Fetch initial products
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authProvider = context.read<AuthProvider>();
       if (authProvider.appUser?.storeId != null) {
         context
             .read<InventoryProvider>()
-            .listenToProducts(authProvider.appUser!.storeId!);
+            .fetchInitialPage(authProvider.appUser!.storeId!);
       }
     });
   }

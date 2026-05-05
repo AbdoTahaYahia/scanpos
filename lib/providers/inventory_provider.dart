@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../services/product_service.dart';
@@ -11,28 +12,80 @@ class InventoryProvider extends ChangeNotifier {
   List<String> _categories = [];
   String? _selectedCategory;
   String _searchQuery = '';
+  
+  // Pagination State
   bool _isLoading = true;
-  StreamSubscription? _subscription;
+  bool _isFetchingMore = false;
+  bool _hasMore = true;
+  DocumentSnapshot? _lastDoc;
+  String? _currentStoreId;
 
   List<Product> get products => _filteredProducts;
   List<String> get categories => _categories;
   String? get selectedCategory => _selectedCategory;
   String get searchQuery => _searchQuery;
   bool get isLoading => _isLoading;
+  bool get isFetchingMore => _isFetchingMore;
+  bool get hasMore => _hasMore;
 
-  /// Start listening to products for a store
-  void listenToProducts(String storeId) {
-    _subscription?.cancel();
+  /// Fetch initial page of products
+  Future<void> fetchInitialPage(String storeId) async {
+    _currentStoreId = storeId;
     _isLoading = true;
+    _isFetchingMore = false;
+    _hasMore = true;
+    _lastDoc = null;
+    _products = [];
     notifyListeners();
 
-    _subscription = _productService.getProducts(storeId).listen((products) {
-      _products = products;
+    try {
+      final result = await _productService.getProductsPaginated(storeId: storeId);
+      _products = result.products;
+      _lastDoc = result.lastDoc;
+      _hasMore = result.hasMore;
+    } catch (e) {
+      debugPrint('Error fetching products: $e');
+    } finally {
+      _isLoading = false;
       _updateCategories();
       _applyFilters();
-      _isLoading = false;
       notifyListeners();
-    });
+    }
+  }
+
+  /// Fetch next page of products (triggered on scroll)
+  Future<void> fetchNextPage() async {
+    if (_isFetchingMore || !_hasMore || _currentStoreId == null) return;
+
+    _isFetchingMore = true;
+    notifyListeners();
+
+    try {
+      final result = await _productService.getProductsPaginated(
+        storeId: _currentStoreId!,
+        lastDoc: _lastDoc,
+      );
+      
+      if (result.products.isNotEmpty) {
+        _products.addAll(result.products);
+        _lastDoc = result.lastDoc;
+      }
+      _hasMore = result.hasMore;
+    } catch (e) {
+      debugPrint('Error fetching more products: $e');
+    } finally {
+      _isFetchingMore = false;
+      _updateCategories();
+      _applyFilters();
+      notifyListeners();
+    }
+  }
+
+  /// Refresh products manually
+  Future<void> refreshProducts() async {
+    if (_currentStoreId != null) {
+      await fetchInitialPage(_currentStoreId!);
+    }
   }
 
   /// Set search query
@@ -84,9 +137,4 @@ class InventoryProvider extends ChangeNotifier {
     }).toList();
   }
 
-  @override
-  void dispose() {
-    _subscription?.cancel();
-    super.dispose();
-  }
 }

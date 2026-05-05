@@ -11,6 +11,7 @@ import '../../models/product.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_styles.dart';
 import '../../widgets/pill_button.dart';
+import '../../widgets/pill_input.dart';
 import '../../widgets/circle_button.dart';
 import '../../widgets/rounded_card.dart';
 import '../../widgets/scan_feedback_overlay.dart';
@@ -31,6 +32,8 @@ class _ScannerScreenState extends State<ScannerScreen>
   final TextRecognizer _textRecognizer = TextRecognizer();
   final ProductService _productService = ProductService();
   final _currencyFormat = NumberFormat.currency(symbol: 'EGP ', decimalDigits: 2);
+  final TextEditingController _searchCtrl = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
 
   bool _isProcessing = false;
   bool _isCameraReady = false;
@@ -317,6 +320,8 @@ class _ScannerScreenState extends State<ScannerScreen>
     _cameraController?.dispose();
     _barcodeScanner.close();
     _textRecognizer.close();
+    _searchCtrl.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -369,6 +374,103 @@ class _ScannerScreenState extends State<ScannerScreen>
                           ),
                   ),
                 ),
+              ),
+            ),
+
+            // ─── Manual Search Bar ───────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+              child: RawAutocomplete<Product>(
+                textEditingController: _searchCtrl,
+                focusNode: _searchFocusNode,
+                optionsBuilder: (TextEditingValue textEditingValue) {
+                  if (textEditingValue.text.isEmpty) {
+                    return const Iterable<Product>.empty();
+                  }
+                  final query = textEditingValue.text.toLowerCase();
+                  // We need to access inventory provider safely.
+                  final products = context.read<InventoryProvider>().products;
+                  
+                  // Return up to 3 matches
+                  return products
+                      .where((p) => p.name.toLowerCase().contains(query) || p.barcode.contains(query))
+                      .take(3);
+                },
+                displayStringForOption: (Product option) => option.name,
+                onSelected: (Product selection) {
+                  context.read<CartProvider>().addItem(selection);
+                  ScanFeedbackOverlay.show(context, productName: selection.name);
+                  // Clear the search bar after selection
+                  Future.delayed(Duration.zero, () {
+                    _searchCtrl.clear();
+                    _searchFocusNode.unfocus();
+                  });
+                },
+                fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                  return PillInput(
+                    controller: controller,
+                    focusNode: focusNode,
+                    hint: 'Search by name or barcode...',
+                    prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.outline, size: 22),
+                    onSubmitted: (_) => onEditingComplete(),
+                  );
+                },
+                optionsViewBuilder: (context, onSelected, options) {
+                  return Align(
+                    alignment: Alignment.topLeft,
+                    child: Material(
+                      elevation: 4,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      color: Colors.transparent,
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 8, right: 48),
+                        decoration: BoxDecoration(
+                          color: AppTheme.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppTheme.black, width: 2),
+                        ),
+                        child: ListView.builder(
+                          padding: EdgeInsets.zero,
+                          shrinkWrap: true,
+                          itemCount: options.length,
+                          itemBuilder: (context, index) {
+                            final option = options.elementAt(index);
+                            return InkWell(
+                              onTap: () {
+                                onSelected(option);
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        option.name,
+                                        style: AppTheme.bodyLg.copyWith(fontWeight: FontWeight.w700),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    Text(
+                                      _currencyFormat.format(option.price),
+                                      style: AppTheme.labelBold,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
 

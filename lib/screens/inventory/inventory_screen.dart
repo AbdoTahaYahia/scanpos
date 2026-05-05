@@ -10,8 +10,34 @@ import '../../widgets/product_chip.dart';
 import '../../widgets/rounded_card.dart';
 import 'add_edit_product_screen.dart';
 
-class InventoryScreen extends StatelessWidget {
+class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
+
+  @override
+  State<InventoryScreen> createState() => _InventoryScreenState();
+}
+
+class _InventoryScreenState extends State<InventoryScreen> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      context.read<InventoryProvider>().fetchNextPage();
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -101,18 +127,32 @@ class InventoryScreen extends StatelessWidget {
                     )
                   : inventoryProvider.products.isEmpty
                       ? _buildEmptyState()
-                      : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
-                          itemCount: inventoryProvider.products.length,
-                          separatorBuilder: (_, _a) => AppStyles.gap12,
-                          itemBuilder: (context, index) {
-                            final product =
-                                inventoryProvider.products[index];
-                            return _ProductCard(
-                              product: product,
-                              currencyFormat: currencyFormat,
-                            );
-                          },
+                      : RefreshIndicator(
+                          color: AppTheme.black,
+                          backgroundColor: AppTheme.white,
+                          onRefresh: () => inventoryProvider.refreshProducts(),
+                          child: ListView.separated(
+                            controller: _scrollController,
+                            padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
+                            // Add 1 to itemCount if fetching more to show spinner
+                            itemCount: inventoryProvider.products.length + (inventoryProvider.isFetchingMore ? 1 : 0),
+                            separatorBuilder: (_, _a) => AppStyles.gap12,
+                            itemBuilder: (context, index) {
+                              if (index == inventoryProvider.products.length) {
+                                return const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 16),
+                                  child: Center(
+                                    child: CircularProgressIndicator(color: AppTheme.black),
+                                  ),
+                                );
+                              }
+                              final product = inventoryProvider.products[index];
+                              return _ProductCard(
+                                product: product,
+                                currencyFormat: currencyFormat,
+                              );
+                            },
+                          ),
                         ),
             ),
           ],
@@ -219,24 +259,53 @@ class _ProductCard extends StatelessWidget {
                 AppStyles.gap4,
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceContainer,
-                        borderRadius:
-                            BorderRadius.circular(AppTheme.radiusFull),
-                      ),
-                      child: Text(
-                        product.category,
-                        style: AppTheme.labelBold.copyWith(
-                          color: AppTheme.onSurfaceVariant,
-                          fontSize: 10,
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceContainer,
+                          borderRadius:
+                              BorderRadius.circular(AppTheme.radiusFull),
+                        ),
+                        child: Text(
+                          product.category,
+                          style: AppTheme.labelBold.copyWith(
+                            color: AppTheme.onSurfaceVariant,
+                            fontSize: 10,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ),
+                    if (product.size != null && product.size!.isNotEmpty) ...[
+                      AppStyles.gapW8,
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.surfaceContainerHigh,
+                            borderRadius:
+                                BorderRadius.circular(AppTheme.radiusFull),
+                          ),
+                          child: Text(
+                            product.size!,
+                            style: AppTheme.labelBold.copyWith(
+                              color: AppTheme.onSurfaceVariant,
+                              fontSize: 10,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
                     AppStyles.gapW8,
                     Text(
                       'Stock: ${product.quantityInStock}',
