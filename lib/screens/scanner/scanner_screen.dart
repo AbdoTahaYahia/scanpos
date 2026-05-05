@@ -37,7 +37,8 @@ class _ScannerScreenState extends State<ScannerScreen>
 
   bool _isProcessing = false;
   bool _isCameraReady = false;
-  Product? _textMatchedProduct;
+  List<Product> _textMatchedProducts = [];
+  DateTime _lastTextMatchUpdate = DateTime.now();
 
   @override
   void initState() {
@@ -182,7 +183,7 @@ class _ScannerScreenState extends State<ScannerScreen>
       ScanFeedbackOverlay.show(context, productName: product.name);
       // Clear text match since barcode found
       setState(() {
-        _textMatchedProduct = null;
+        _textMatchedProducts.clear();
       });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -199,8 +200,7 @@ class _ScannerScreenState extends State<ScannerScreen>
     if (products.isEmpty) return;
 
     final textLower = fullText.toLowerCase();
-    Product? bestMatch;
-    int bestScore = 0;
+    final scoredProducts = <Product, int>{};
 
     for (final product in products) {
       final nameLower = product.name.toLowerCase();
@@ -225,27 +225,48 @@ class _ScannerScreenState extends State<ScannerScreen>
         }
       }
 
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = product;
+      if (score >= 2) {
+        scoredProducts[product] = score;
       }
     }
 
-    if (bestScore >= 2 && mounted) {
+    if (scoredProducts.isNotEmpty && mounted) {
+      final sortedEntries = scoredProducts.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      
+      final topMatches = sortedEntries.take(3).map((e) => e.key).toList();
+
+      bool isIdentical = false;
+      if (_textMatchedProducts.length == topMatches.length) {
+        isIdentical = true;
+        for (int i = 0; i < topMatches.length; i++) {
+          if (_textMatchedProducts[i].id != topMatches[i].id) {
+            isIdentical = false;
+            break;
+          }
+        }
+      }
+
+      if (isIdentical) return;
+
+      final now = DateTime.now();
+      if (now.difference(_lastTextMatchUpdate).inMilliseconds < 2000) {
+        return;
+      }
+
+      _lastTextMatchUpdate = now;
       setState(() {
-        _textMatchedProduct = bestMatch;
+        _textMatchedProducts = topMatches;
       });
     }
   }
 
-  void _addTextMatchedProduct() {
-    if (_textMatchedProduct != null) {
-      context.read<CartProvider>().addItem(_textMatchedProduct!);
-      ScanFeedbackOverlay.show(context, productName: _textMatchedProduct!.name);
-      setState(() {
-        _textMatchedProduct = null;
-      });
-    }
+  void _addTextMatchedProduct(Product product) {
+    context.read<CartProvider>().addItem(product);
+    ScanFeedbackOverlay.show(context, productName: product.name);
+    setState(() {
+      _textMatchedProducts.remove(product);
+    });
   }
 
   Future<void> _handleCheckout() async {
@@ -475,47 +496,55 @@ class _ScannerScreenState extends State<ScannerScreen>
             ),
 
             // ─── Text Match Banner ───────────────────────────────
-            if (_textMatchedProduct != null)
+            if (_textMatchedProducts.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
-                child: GestureDetector(
-                  onTap: _addTextMatchedProduct,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: AppTheme.black,
-                      borderRadius: BorderRadius.circular(AppTheme.radiusFull),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.text_fields_rounded, color: AppTheme.white, size: 20),
-                        AppStyles.gapW8,
-                        Expanded(
-                          child: Text(
-                            _textMatchedProduct!.name,
-                            style: AppTheme.bodyLg.copyWith(
-                              color: AppTheme.white,
-                              fontWeight: FontWeight.w700,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        AppStyles.gapW8,
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Column(
+                  children: _textMatchedProducts.map((matchedProduct) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: GestureDetector(
+                        onTap: () => _addTextMatchedProduct(matchedProduct),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
-                            color: AppTheme.white,
+                            color: AppTheme.black,
                             borderRadius: BorderRadius.circular(AppTheme.radiusFull),
                           ),
-                          child: Text(
-                            '+ Add',
-                            style: AppTheme.labelBold.copyWith(color: AppTheme.black),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.text_fields_rounded, color: AppTheme.white, size: 20),
+                              AppStyles.gapW8,
+                              Expanded(
+                                child: Text(
+                                  matchedProduct.name.replaceAll('\n', ' ').trim(),
+                                  style: AppTheme.bodyLg.copyWith(
+                                    color: AppTheme.white,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              AppStyles.gapW8,
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.white,
+                                  borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                                ),
+                                child: Text(
+                                  '+ Add',
+                                  style: AppTheme.labelBold.copyWith(color: AppTheme.black),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
+                    );
+                  }).toList(),
                 ),
               ),
 
