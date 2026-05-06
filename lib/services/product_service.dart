@@ -53,6 +53,12 @@ class ProductService {
     );
   }
 
+  /// Get all products for local search/OCR
+  Future<List<Product>> getAllProducts({required String storeId}) async {
+    final snapshot = await _productsRef(storeId).get();
+    return snapshot.docs.map((doc) => Product.fromMap(doc.data())).toList();
+  }
+
   /// Get a single product by barcode
   Future<Product?> getProductByBarcode(String storeId, String barcode) async {
     final query = await _productsRef(storeId)
@@ -62,12 +68,6 @@ class ProductService {
 
     if (query.docs.isEmpty) return null;
     return Product.fromMap(query.docs.first.data());
-  }
-
-  /// Get all products for search/OCR purposes (bypasses pagination)
-  Future<List<Product>> getAllProducts(String storeId) async {
-    final snapshot = await _productsRef(storeId).get();
-    return snapshot.docs.map((doc) => Product.fromMap(doc.data())).toList();
   }
 
   /// Get a single product by ID

@@ -37,6 +37,7 @@ class _ScannerScreenState extends State<ScannerScreen>
 
   bool _isProcessing = false;
   bool _isCameraReady = false;
+  bool _isFlashOn = false;
   List<Product> _textMatchedProducts = [];
   DateTime _lastTextMatchUpdate = DateTime.now();
 
@@ -107,10 +108,33 @@ class _ScannerScreenState extends State<ScannerScreen>
       if (_cameraController?.value.isStreamingImages == true) {
         await _cameraController?.stopImageStream();
       }
+      if (_isFlashOn) {
+        await _cameraController?.setFlashMode(FlashMode.off);
+      }
       await _cameraController?.dispose();
     } catch (_) {}
     _cameraController = null;
-    if (mounted) setState(() => _isCameraReady = false);
+    if (mounted) {
+      setState(() {
+        _isCameraReady = false;
+        _isFlashOn = false;
+      });
+    }
+  }
+
+  Future<void> _toggleFlash() async {
+    if (_cameraController == null) return;
+    try {
+      if (_isFlashOn) {
+        await _cameraController!.setFlashMode(FlashMode.off);
+        setState(() => _isFlashOn = false);
+      } else {
+        await _cameraController!.setFlashMode(FlashMode.torch);
+        setState(() => _isFlashOn = true);
+      }
+    } catch (e) {
+      debugPrint('Error toggling flash: $e');
+    }
   }
 
   void _processFrame(CameraImage image) async {
@@ -196,7 +220,7 @@ class _ScannerScreenState extends State<ScannerScreen>
   }
 
   void _handleDetectedText(String fullText, List<TextBlock> blocks) {
-    final products = context.read<InventoryProvider>().allProducts;
+    final products = context.read<InventoryProvider>().allProductsForSearch;
     if (products.isEmpty) return;
 
     final textLower = fullText.toLowerCase();
@@ -373,26 +397,49 @@ class _ScannerScreenState extends State<ScannerScreen>
                     border: Border.all(color: AppTheme.black, width: 2),
                     borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(AppTheme.radiusMd - 2),
-                    child: _isCameraReady && _cameraController != null
-                        ? FittedBox(
-                            fit: BoxFit.cover,
-                            child: SizedBox(
-                              width: _cameraController!.value.previewSize?.height ?? 640,
-                              height: _cameraController!.value.previewSize?.width ?? 480,
-                              child: CameraPreview(_cameraController!),
-                            ),
-                          )
-                        : Container(
-                            color: AppTheme.black,
-                            child: const Center(
-                              child: CircularProgressIndicator(
-                                color: AppTheme.white,
-                                strokeWidth: 3,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMd - 2),
+                        child: _isCameraReady && _cameraController != null
+                            ? FittedBox(
+                                fit: BoxFit.cover,
+                                child: SizedBox(
+                                  width: _cameraController!.value.previewSize?.height ?? 640,
+                                  height: _cameraController!.value.previewSize?.width ?? 480,
+                                  child: CameraPreview(_cameraController!),
+                                ),
+                              )
+                            : Container(
+                                color: AppTheme.black,
+                                child: const Center(
+                                  child: CircularProgressIndicator(
+                                    color: AppTheme.white,
+                                    strokeWidth: 3,
+                                  ),
+                                ),
                               ),
+                      ),
+                      if (_isCameraReady && _cameraController != null)
+                        Positioned(
+                          bottom: 12,
+                          right: 12,
+                          child: CircleAvatar(
+                            backgroundColor: AppTheme.black.withValues(alpha: 0.5),
+                            radius: 20,
+                            child: IconButton(
+                              padding: EdgeInsets.zero,
+                              icon: Icon(
+                                _isFlashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+                                color: AppTheme.white,
+                                size: 20,
+                              ),
+                              onPressed: _toggleFlash,
                             ),
                           ),
+                        ),
+                    ],
                   ),
                 ),
               ),
@@ -409,8 +456,8 @@ class _ScannerScreenState extends State<ScannerScreen>
                     return const Iterable<Product>.empty();
                   }
                   final query = textEditingValue.text.toLowerCase();
-                  // Access full catalog for searching
-                  final products = context.read<InventoryProvider>().allProducts;
+                  // Access all products loaded for search purposes, not just the paginated list
+                  final products = context.read<InventoryProvider>().allProductsForSearch;
                   
                   // Return up to 3 matches
                   return products

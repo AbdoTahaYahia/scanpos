@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:vibration/vibration.dart';
 import '../models/cart_item.dart';
 import '../models/product.dart';
 import '../models/app_user.dart';
@@ -27,6 +28,14 @@ class CartProvider extends ChangeNotifier {
     } else {
       _items.add(CartItem(product: product));
     }
+    
+    // Trigger a guaranteed hardware vibration (80ms pulse)
+    Vibration.hasVibrator().then((hasVibrator) {
+      if (hasVibrator == true) {
+        Vibration.vibrate(duration: 80);
+      }
+    });
+    
     notifyListeners();
   }
 
