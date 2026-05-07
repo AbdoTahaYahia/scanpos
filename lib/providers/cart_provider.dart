@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:vibration/vibration.dart';
+import 'package:flutter/services.dart';
+import 'package:audioplayers/audioplayers.dart';
 import '../models/cart_item.dart';
 import '../models/product.dart';
 import '../models/app_user.dart';
@@ -7,6 +8,7 @@ import '../services/transaction_service.dart';
 
 class CartProvider extends ChangeNotifier {
   final TransactionService _transactionService = TransactionService();
+  final AudioPlayer _audioPlayer = AudioPlayer();
   final List<CartItem> _items = [];
   bool _isProcessing = false;
 
@@ -29,12 +31,11 @@ class CartProvider extends ChangeNotifier {
       _items.add(CartItem(product: product));
     }
     
-    // Trigger a guaranteed hardware vibration (80ms pulse)
-    Vibration.hasVibrator().then((hasVibrator) {
-      if (hasVibrator == true) {
-        Vibration.vibrate(duration: 80);
-      }
-    });
+    // Use the most standard system vibration
+    HapticFeedback.vibrate();
+    
+    // Play custom internal sound for Cashier
+    _audioPlayer.play(AssetSource('sounds/beep.ogg'));
     
     notifyListeners();
   }

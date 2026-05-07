@@ -13,6 +13,7 @@ import '../../theme/app_styles.dart';
 import '../../widgets/pill_button.dart';
 import '../../widgets/pill_input.dart';
 import '../../widgets/rounded_card.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 class AddEditProductScreen extends StatefulWidget {
   final Product? product;
@@ -27,6 +28,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   final _formKey = GlobalKey<FormState>();
   final _productService = ProductService();
   final _lookupService = BarcodeLookupService();
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
   late final TextEditingController _nameCtrl;
   late final TextEditingController _priceCtrl;
@@ -74,6 +76,9 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
       builder: (_) => _BarcodeScanDialog(),
     );
     if (result != null && result.isNotEmpty) {
+      // Play the custom sound immediately upon successful scan
+      _audioPlayer.play(AssetSource('sounds/myinstants.mp3'));
+      
       if (result.startsWith('TEXT:')) {
         // Text was detected instead of barcode — use as product name
         final text = result.substring(5).trim();
