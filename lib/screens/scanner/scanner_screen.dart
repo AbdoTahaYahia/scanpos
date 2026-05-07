@@ -35,9 +35,11 @@ class _ScannerScreenState extends State<ScannerScreen>
   final TextEditingController _searchCtrl = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
 
-  bool _isProcessing = false;
+  bool _isProcessingBarcode = false;
+  bool _isProcessingText = false;
   bool _isCameraReady = false;
   bool _isFlashOn = false;
+  int _frameCount = 0;
   List<Product> _textMatchedProducts = [];
   DateTime _lastTextMatchUpdate = DateTime.now();
 
@@ -138,39 +140,46 @@ class _ScannerScreenState extends State<ScannerScreen>
   }
 
   void _processFrame(CameraImage image) async {
-    if (_isProcessing) return;
-    _isProcessing = true;
+    if (_isProcessingBarcode || _isProcessingText) return;
 
-    try {
+    _frameCount++;
+    
+    // Every 30th frame (roughly once a second), try text scanning
+    if (_frameCount % 30 == 0) {
+      _isProcessingText = true;
       final inputImage = _toInputImage(image);
       if (inputImage == null) {
-        _isProcessing = false;
+        _isProcessingText = false;
         return;
       }
-
-      // 1. Try barcode first (priority)
-      final barcodes = await _barcodeScanner.processImage(inputImage);
-      if (barcodes.isNotEmpty) {
-        final rawValue = barcodes.first.rawValue;
-        if (rawValue != null && rawValue.isNotEmpty) {
-          await _handleBarcode(rawValue);
-          // Wait before next scan
-          await Future.delayed(const Duration(milliseconds: 1500));
-          _isProcessing = false;
-          return;
+      try {
+        final textResult = await _textRecognizer.processImage(inputImage);
+        if (textResult.text.isNotEmpty && mounted) {
+          _handleDetectedText(textResult.text, textResult.blocks);
         }
+      } catch (_) {}
+      _isProcessingText = false;
+    } else {
+      // For all other frames, run fast barcode scanning
+      _isProcessingBarcode = true;
+      final inputImage = _toInputImage(image);
+      if (inputImage == null) {
+        _isProcessingBarcode = false;
+        return;
       }
-
-      // 2. No barcode found — try text recognition
-      final textResult = await _textRecognizer.processImage(inputImage);
-      if (textResult.text.isNotEmpty && mounted) {
-        _handleDetectedText(textResult.text, textResult.blocks);
-      }
-    } catch (_) {}
-
-    // Throttle processing
-    await Future.delayed(const Duration(milliseconds: 400));
-    _isProcessing = false;
+      try {
+        final barcodes = await _barcodeScanner.processImage(inputImage);
+        if (barcodes.isNotEmpty && mounted) {
+          final rawValue = barcodes.first.rawValue;
+          if (rawValue != null && rawValue.isNotEmpty) {
+            await _handleBarcode(rawValue);
+            // Throttle barcode after a successful scan
+            await Future.delayed(const Duration(milliseconds: 800));
+          }
+        }
+      } catch (_) {}
+      _isProcessingBarcode = false;
+    }
   }
 
   InputImage? _toInputImage(CameraImage image) {
