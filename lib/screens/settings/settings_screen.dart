@@ -21,8 +21,9 @@ class SettingsScreen extends StatelessWidget {
 
     if (user == null) return const SizedBox.shrink();
 
-    return Scaffold(
-      body: SafeArea(
+    return Drawer(
+      backgroundColor: AppTheme.white,
+      child: SafeArea(
         child: SingleChildScrollView(
           padding: AppStyles.paddingScreen,
           child: Column(
@@ -32,7 +33,7 @@ class SettingsScreen extends StatelessWidget {
               Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back_rounded),
+                    icon: const Icon(Icons.close_rounded),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                   AppStyles.gapW8,

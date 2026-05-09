@@ -9,6 +9,7 @@ import '../../widgets/pill_input.dart';
 import '../../widgets/product_chip.dart';
 import '../../widgets/rounded_card.dart';
 import 'add_edit_product_screen.dart';
+import '../settings/settings_screen.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
@@ -52,7 +53,18 @@ class _InventoryScreenState extends State<InventoryScreen> {
             // ─── Header ──────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-              child: Text('Inventory', style: AppTheme.headlineLg),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Inventory', style: AppTheme.headlineLg),
+                  Builder(
+                    builder: (context) => IconButton(
+                      icon: const Icon(Icons.menu_rounded, color: AppTheme.black),
+                      onPressed: () => context.findRootAncestorStateOfType<ScaffoldState>()?.openDrawer(),
+                    ),
+                  ),
+                ],
+              ),
             ),
 
             AppStyles.gap16,

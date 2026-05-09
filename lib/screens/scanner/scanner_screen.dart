@@ -15,6 +15,7 @@ import '../../widgets/pill_input.dart';
 import '../../widgets/circle_button.dart';
 import '../../widgets/rounded_card.dart';
 import '../../widgets/scan_feedback_overlay.dart';
+import '../settings/settings_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -398,7 +399,18 @@ class _ScannerScreenState extends State<ScannerScreen>
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-              child: Text('Scanner', style: AppTheme.headlineLg),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Scanner', style: AppTheme.headlineLg),
+                  Builder(
+                    builder: (context) => IconButton(
+                      icon: const Icon(Icons.menu_rounded, color: AppTheme.black),
+                      onPressed: () => context.findRootAncestorStateOfType<ScaffoldState>()?.openDrawer(),
+                    ),
+                  ),
+                ],
+              ),
             ),
 
             AppStyles.gap16,

@@ -47,6 +47,7 @@ class _AppShellState extends State<AppShell> {
     }
 
     return Scaffold(
+      drawer: const SettingsScreen(),
       body: IndexedStack(
         index: _currentIndex,
         children: screens,
@@ -59,41 +60,24 @@ class _AppShellState extends State<AppShell> {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 // Scanner Tab
-                Expanded(
-                  child: _NavItem(
-                    icon: Icons.qr_code_scanner_rounded,
-                    label: 'Scanner',
-                    isSelected: _currentIndex == 0,
-                    onTap: () => setState(() => _currentIndex = 0),
-                  ),
+                _NavItem(
+                  icon: Icons.qr_code_scanner_rounded,
+                  label: 'Scanner',
+                  isSelected: _currentIndex == 0,
+                  onTap: () => setState(() => _currentIndex = 0),
                 ),
 
                 // Inventory Tab (only for manager/warehouse)
                 if (canManageInventory)
-                  Expanded(
-                    child: _NavItem(
-                      icon: Icons.inventory_2_rounded,
-                      label: 'Inventory',
-                      isSelected: _currentIndex == 1,
-                      onTap: () => setState(() => _currentIndex = 1),
-                    ),
+                  _NavItem(
+                    icon: Icons.inventory_2_rounded,
+                    label: 'Inventory',
+                    isSelected: _currentIndex == 1,
+                    onTap: () => setState(() => _currentIndex = 1),
                   ),
-
-                // Settings (profile icon, opens settings page)
-                Expanded(
-                  child: _NavItem(
-                    icon: Icons.person_rounded,
-                    label: 'Profile',
-                    isSelected: false,
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const SettingsScreen(),
-                      ),
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
