@@ -41,7 +41,10 @@ class InventoryProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await _productService.getProductsPaginated(storeId: storeId);
+      final result = await _productService.getProductsPaginated(
+        storeId: storeId,
+        limit: 10,
+      );
       _products = result.products;
       _lastDoc = result.lastDoc;
       _hasMore = result.hasMore;
@@ -76,6 +79,7 @@ class InventoryProvider extends ChangeNotifier {
       final result = await _productService.getProductsPaginated(
         storeId: _currentStoreId!,
         lastDoc: _lastDoc,
+        limit: 10,
       );
       
       if (result.products.isNotEmpty) {

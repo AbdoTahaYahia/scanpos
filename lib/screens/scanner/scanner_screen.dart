@@ -591,7 +591,7 @@ class _ScannerScreenState extends State<ScannerScreen>
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.text_fields_rounded, color: AppTheme.white, size: 20),
+                              const Icon(Icons.auto_awesome_rounded, color: AppTheme.white, size: 20),
                               AppStyles.gapW8,
                               Expanded(
                                 child: Text(
