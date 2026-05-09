@@ -16,6 +16,7 @@ import '../../widgets/circle_button.dart';
 import '../../widgets/rounded_card.dart';
 import '../../widgets/scan_feedback_overlay.dart';
 import 'package:intl/intl.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 class ScannerScreen extends StatefulWidget {
   final bool isActive;
@@ -47,6 +48,9 @@ class _ScannerScreenState extends State<ScannerScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (widget.isActive) {
+      WakelockPlus.enable();
+    }
     _initCamera();
   }
 
@@ -84,8 +88,10 @@ class _ScannerScreenState extends State<ScannerScreen>
     super.didUpdateWidget(oldWidget);
     if (widget.isActive && !oldWidget.isActive) {
       // Tab became active — fully reinitialize camera for fresh preview
+      WakelockPlus.enable();
       _reinitCamera();
     } else if (!widget.isActive && oldWidget.isActive) {
+      WakelockPlus.disable();
       _disposeCamera();
     }
   }
@@ -94,8 +100,10 @@ class _ScannerScreenState extends State<ScannerScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!widget.isActive) return;
     if (state == AppLifecycleState.resumed) {
+      WakelockPlus.enable();
       _reinitCamera();
     } else if (state == AppLifecycleState.paused) {
+      WakelockPlus.disable();
       _disposeCamera();
     }
   }
@@ -371,6 +379,7 @@ class _ScannerScreenState extends State<ScannerScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    WakelockPlus.disable();
     _cameraController?.dispose();
     _barcodeScanner.close();
     _textRecognizer.close();
