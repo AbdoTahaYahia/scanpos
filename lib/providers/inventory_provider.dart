@@ -52,10 +52,10 @@ class InventoryProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error fetching products: $e');
     } finally {
+      await _loadAllProductsForSearch();
       _isLoading = false;
       _updateCategories();
       _applyFilters();
-      _loadAllProductsForSearch();
       notifyListeners();
     }
   }
@@ -103,6 +103,15 @@ class InventoryProvider extends ChangeNotifier {
     if (_currentStoreId != null) {
       await fetchInitialPage(_currentStoreId!);
     }
+  }
+
+  /// Remove a product from local inventory lists after a successful delete.
+  void removeProductLocally(String productId) {
+    _products.removeWhere((product) => product.id == productId);
+    _allProductsForSearch.removeWhere((product) => product.id == productId);
+    _updateCategories();
+    _applyFilters();
+    notifyListeners();
   }
 
   /// Set search query

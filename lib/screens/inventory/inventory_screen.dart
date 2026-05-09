@@ -9,8 +9,6 @@ import '../../widgets/pill_input.dart';
 import '../../widgets/product_chip.dart';
 import '../../widgets/rounded_card.dart';
 import 'add_edit_product_screen.dart';
-import '../settings/settings_screen.dart';
-
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
 

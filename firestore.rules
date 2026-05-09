@@ -81,15 +81,6 @@ service cloud.firestore {
         );
     }
 
-    function isCashierStockUpdate(storeId) {
-      let diff = request.resource.data.diff(resource.data);
-      return hasRole(storeId, 'cashier') &&
-        diff.affectedKeys().hasOnly(['quantityInStock']) &&
-        request.resource.data.quantityInStock is int &&
-        request.resource.data.quantityInStock >= 0 &&
-        request.resource.data.quantityInStock <= resource.data.quantityInStock;
-    }
-
     // ─── Users Collection ─────────────────────────────────────────
     // Users can read/write their own document
     // Store managers can read employees of their store
@@ -124,8 +115,7 @@ service cloud.firestore {
           isStoreManager(storeId) || hasRole(storeId, 'warehouse')
         );
         allow update: if isAuthenticated() && (
-          isStoreManager(storeId) || hasRole(storeId, 'warehouse') ||
-          isCashierStockUpdate(storeId)
+          isStoreManager(storeId) || hasRole(storeId, 'warehouse')
         );
       }
 
@@ -133,10 +123,7 @@ service cloud.firestore {
       match /transactions/{transactionId} {
         // Only managers can read transactions
         allow read: if isAuthenticated() && isStoreManager(storeId);
-        // Cashier and manager can create transactions
-        allow create: if isAuthenticated() && (
-          isStoreManager(storeId) || hasRole(storeId, 'cashier')
-        );
+        allow create: if false; // Checkout writes must go through Cloud Functions
         allow update, delete: if false; // Transactions are immutable
       }
     }

@@ -15,7 +15,6 @@ import '../../widgets/pill_input.dart';
 import '../../widgets/circle_button.dart';
 import '../../widgets/rounded_card.dart';
 import '../../widgets/scan_feedback_overlay.dart';
-import '../settings/settings_screen.dart';
 import '../../utils/string_extensions.dart';
 import 'package:intl/intl.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -222,12 +221,21 @@ class _ScannerScreenState extends State<ScannerScreen>
     if (!mounted) return;
 
     if (product != null) {
-      context.read<CartProvider>().addItem(product);
-      ScanFeedbackOverlay.show(context, productName: product.name);
-      // Clear text match since barcode found
-      setState(() {
-        _textMatchedProducts.clear();
-      });
+      final added = context.read<CartProvider>().addItem(product);
+      if (added) {
+        ScanFeedbackOverlay.show(context, productName: product.name);
+        // Clear text match since barcode found
+        setState(() {
+          _textMatchedProducts.clear();
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Product out of stock: ${product.name}'),
+            backgroundColor: AppTheme.error,
+          ),
+        );
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -305,11 +313,20 @@ class _ScannerScreenState extends State<ScannerScreen>
   }
 
   void _addTextMatchedProduct(Product product) {
-    context.read<CartProvider>().addItem(product);
-    ScanFeedbackOverlay.show(context, productName: product.name);
-    setState(() {
-      _textMatchedProducts.remove(product);
-    });
+    final added = context.read<CartProvider>().addItem(product);
+    if (added) {
+      ScanFeedbackOverlay.show(context, productName: product.name);
+      setState(() {
+        _textMatchedProducts.remove(product);
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Product out of stock: ${product.name}'),
+          backgroundColor: AppTheme.error,
+        ),
+      );
+    }
   }
 
   Future<void> _handleCheckout() async {
@@ -498,8 +515,17 @@ class _ScannerScreenState extends State<ScannerScreen>
                 },
                 displayStringForOption: (Product option) => option.name,
                 onSelected: (Product selection) {
-                  context.read<CartProvider>().addItem(selection);
-                  ScanFeedbackOverlay.show(context, productName: selection.name);
+                  final added = context.read<CartProvider>().addItem(selection);
+                  if (added) {
+                    ScanFeedbackOverlay.show(context, productName: selection.name);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Product out of stock: ${selection.name}'),
+                        backgroundColor: AppTheme.error,
+                      ),
+                    );
+                  }
                   // Clear the search bar after selection
                   Future.delayed(Duration.zero, () {
                     _searchCtrl.clear();

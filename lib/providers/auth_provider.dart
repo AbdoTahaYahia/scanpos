@@ -65,7 +65,7 @@ class AuthProvider extends ChangeNotifier {
     _userSubscription = _authService.appUserStream(uid).listen((user) async {
       _appUser = user;
 
-      if (user == null) {
+      if (user == null || user.storeId == null) {
         _state = AuthState.needsRoleSelection;
         notifyListeners();
         return;

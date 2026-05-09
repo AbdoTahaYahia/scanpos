@@ -1,11 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:uuid/uuid.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../models/transaction.dart';
 import '../models/cart_item.dart';
 
 class TransactionService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final Uuid _uuid = const Uuid();
+  final FirebaseFunctions _functions = FirebaseFunctions.instance;
 
   /// Collection reference for transactions in a store
   CollectionReference<Map<String, dynamic>> _transactionsRef(String storeId) {
@@ -22,76 +22,35 @@ class TransactionService {
     required String cashierName,
     required List<CartItem> cartItems,
   }) async {
-    final transactionId = _uuid.v4();
-    final now = DateTime.now();
-
-    // Convert cart items to transaction items
-    final transactionItems = cartItems
-        .map((item) => TransactionItem(
-              productId: item.product.id,
-              productName: item.product.name,
-              price: item.product.price,
-              quantity: item.quantity,
-              subtotal: item.subtotal,
-            ))
-        .toList();
-
-    final totalAmount =
-        cartItems.fold<double>(0, (total, item) => total + item.subtotal);
-
-    final transaction = SaleTransaction(
-      id: transactionId,
-      storeId: storeId,
-      cashierId: cashierId,
-      cashierName: cashierName,
-      items: transactionItems,
-      totalAmount: totalAmount,
-      timestamp: now,
+    final callable = _functions.httpsCallable('checkout');
+    final response = await callable.call<Map<String, dynamic>>(
+      {
+        'storeId': storeId,
+        'cartItems': cartItems
+            .map((item) => {
+                  'productId': item.product.id,
+                  'quantity': item.quantity,
+                })
+            .toList(),
+      },
     );
 
-    // Use a Firestore transaction to atomically:
-    // 1. Verify stock is sufficient
-    // 2. Create the transaction record
-    // 3. Decrement stock for each product
-    await _firestore.runTransaction((tx) async {
-      final productRefs = cartItems.map((item) {
-        return _firestore
-            .collection('stores')
-            .doc(storeId)
-            .collection('products')
-            .doc(item.product.id);
-      }).toList();
+    final data = response.data;
+    final rawItems = data['items'] as List<dynamic>? ?? [];
 
-      // Read all products first
-      final snapshots = await Future.wait(productRefs.map((ref) => tx.get(ref)));
-
-      // Verify stock
-      for (int i = 0; i < cartItems.length; i++) {
-        final snap = snapshots[i];
-        if (!snap.exists) {
-          throw Exception('Product ${cartItems[i].product.name} not found');
-        }
-        final currentStock = snap.data()?['quantityInStock'] as int? ?? 0;
-        if (currentStock < cartItems[i].quantity) {
-          throw Exception('Insufficient stock for ${cartItems[i].product.name}. Available: $currentStock');
-        }
-      }
-
-      // Write transaction
-      tx.set(
-        _transactionsRef(storeId).doc(transactionId),
-        transaction.toMap(),
-      );
-
-      // Decrement stock
-      for (int i = 0; i < cartItems.length; i++) {
-        tx.update(productRefs[i], {
-          'quantityInStock': FieldValue.increment(-cartItems[i].quantity),
-        });
-      }
-    });
-
-    return transaction;
+    return SaleTransaction(
+      id: data['transactionId'] as String,
+      storeId: storeId,
+      cashierId: cashierId,
+      cashierName: data['cashierName'] as String? ?? cashierName,
+      items: rawItems
+          .map((item) => TransactionItem.fromMap(
+                Map<String, dynamic>.from(item as Map),
+              ))
+          .toList(),
+      totalAmount: (data['totalAmount'] as num).toDouble(),
+      timestamp: DateTime.now(),
+    );
   }
 
   /// Stream all transactions for a store (reverse chronological)

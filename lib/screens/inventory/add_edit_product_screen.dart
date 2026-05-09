@@ -331,7 +331,12 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           widget.product!.storeId,
           widget.product!.id,
         );
-        if (mounted) Navigator.of(context).pop();
+        if (mounted) {
+          context
+              .read<InventoryProvider>()
+              .removeProductLocally(widget.product!.id);
+          Navigator.of(context).pop();
+        }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -853,4 +858,3 @@ class _TextReadScreenState extends State<_TextReadScreen> {
     );
   }
 }
-

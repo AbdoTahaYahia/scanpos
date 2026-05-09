@@ -7,10 +7,25 @@ import '../models/app_user.dart';
 import '../services/transaction_service.dart';
 
 class CartProvider extends ChangeNotifier {
-  final TransactionService _transactionService = TransactionService();
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  TransactionService? _transactionService;
+  AudioPlayer? _audioPlayer;
+  final bool _enableFeedback;
   final List<CartItem> _items = [];
   bool _isProcessing = false;
+
+  CartProvider({
+    bool enableFeedback = true,
+    TransactionService? transactionService,
+  })  : _enableFeedback = enableFeedback,
+        _transactionService = transactionService;
+
+  TransactionService get _checkoutService {
+    return _transactionService ??= TransactionService();
+  }
+
+  AudioPlayer get _feedbackPlayer {
+    return _audioPlayer ??= AudioPlayer();
+  }
 
   List<CartItem> get items => List.unmodifiable(_items);
   bool get isProcessing => _isProcessing;
@@ -21,8 +36,8 @@ class CartProvider extends ChangeNotifier {
       _items.fold<double>(0, (sum, item) => sum + item.subtotal);
 
   /// Add a product to cart. If it already exists, increment quantity.
-  void addItem(Product product) {
-    if (product.quantityInStock <= 0) return;
+  bool addItem(Product product) {
+    if (product.quantityInStock <= 0) return false;
 
     final existingIndex =
         _items.indexWhere((item) => item.product.id == product.id);
@@ -31,19 +46,22 @@ class CartProvider extends ChangeNotifier {
       if (_items[existingIndex].quantity < product.quantityInStock) {
         _items[existingIndex].quantity++;
       } else {
-        return; // Cannot add more than in stock
+        return false; // Cannot add more than in stock
       }
     } else {
       _items.add(CartItem(product: product));
     }
     
-    // Use the most standard system vibration
-    HapticFeedback.vibrate();
-    
-    // Play custom internal sound for Cashier
-    _audioPlayer.play(AssetSource('sounds/beep.ogg'));
+    if (_enableFeedback) {
+      // Use the most standard system vibration
+      HapticFeedback.vibrate();
+
+      // Play custom internal sound for Cashier
+      _feedbackPlayer.play(AssetSource('sounds/beep.ogg'));
+    }
     
     notifyListeners();
+    return true;
   }
 
   /// Remove an item from cart entirely
@@ -92,7 +110,7 @@ class CartProvider extends ChangeNotifier {
       _isProcessing = true;
       notifyListeners();
 
-      await _transactionService.createTransaction(
+      await _checkoutService.createTransaction(
         storeId: user.storeId!,
         cashierId: user.uid,
         cashierName: user.displayName,
