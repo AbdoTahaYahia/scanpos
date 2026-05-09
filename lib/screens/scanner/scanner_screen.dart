@@ -16,6 +16,7 @@ import '../../widgets/circle_button.dart';
 import '../../widgets/rounded_card.dart';
 import '../../widgets/scan_feedback_overlay.dart';
 import '../settings/settings_screen.dart';
+import '../../utils/string_extensions.dart';
 import 'package:intl/intl.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -241,11 +242,11 @@ class _ScannerScreenState extends State<ScannerScreen>
     final products = context.read<InventoryProvider>().allProductsForSearch;
     if (products.isEmpty) return;
 
-    final textLower = fullText.toLowerCase();
+    final textLower = fullText.normalizedForSearch;
     final scoredProducts = <Product, int>{};
 
     for (final product in products) {
-      final nameLower = product.name.toLowerCase();
+      final nameLower = product.name.normalizedForSearch;
       final words = nameLower.split(RegExp(r'[\s\-,]+'))
           .where((w) => w.length > 2)
           .toList();
@@ -261,7 +262,7 @@ class _ScannerScreenState extends State<ScannerScreen>
       }
 
       for (final block in blocks) {
-        final blockLower = block.text.toLowerCase();
+        final blockLower = block.text.normalizedForSearch;
         if (blockLower.contains(nameLower) || nameLower.contains(blockLower)) {
           score += 5;
         }
@@ -329,6 +330,7 @@ class _ScannerScreenState extends State<ScannerScreen>
               Text(
                 'Total: ${_currencyFormat.format(cartProvider.totalAmount)}',
                 style: AppTheme.priceDisplay,
+                textAlign: TextAlign.center,
               ),
               AppStyles.gap8,
               Text(
@@ -485,13 +487,13 @@ class _ScannerScreenState extends State<ScannerScreen>
                   if (textEditingValue.text.isEmpty) {
                     return const Iterable<Product>.empty();
                   }
-                  final query = textEditingValue.text.toLowerCase();
+                  final query = textEditingValue.text.normalizedForSearch;
                   // Access all products loaded for search purposes, not just the paginated list
                   final products = context.read<InventoryProvider>().allProductsForSearch;
                   
                   // Return up to 3 matches
                   return products
-                      .where((p) => p.name.toLowerCase().contains(query) || p.barcode.contains(query))
+                      .where((p) => p.name.normalizedForSearch.contains(query) || p.barcode.normalizedForSearch.contains(query))
                       .take(3);
                 },
                 displayStringForOption: (Product option) => option.name,

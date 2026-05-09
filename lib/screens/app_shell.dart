@@ -18,6 +18,20 @@ class _AppShellState extends State<AppShell> {
   int _currentIndex = 0;
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final user = context.watch<AuthProvider>().appUser;
+    final canManage = user?.canManageInventory ?? false;
+    if (!canManage && _currentIndex >= 1) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() => _currentIndex = 0);
+        }
+      });
+    }
+  }
+
+  @override
   void initState() {
     super.initState();
     // Fetch initial products
@@ -41,15 +55,12 @@ class _AppShellState extends State<AppShell> {
       if (canManageInventory) const InventoryScreen(),
     ];
 
-    // Adjust index if user can't see inventory tab
-    if (_currentIndex >= screens.length) {
-      _currentIndex = 0;
-    }
+    final safeIndex = _currentIndex >= screens.length ? 0 : _currentIndex;
 
     return Scaffold(
       drawer: const SettingsScreen(),
       body: IndexedStack(
-        index: _currentIndex,
+        index: safeIndex,
         children: screens,
       ),
       bottomNavigationBar: Container(

@@ -162,12 +162,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
                                             color: AppTheme.black,
                                             strokeWidth: 2.5,
                                           )
-                                        : Text(
-                                            'Scroll for more',
-                                            style: AppTheme.bodySm.copyWith(
-                                              color: AppTheme.outline,
-                                            ),
-                                          ),
+                                        : const SizedBox.shrink(),
                                   ),
                                 );
                               }

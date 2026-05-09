@@ -49,31 +49,48 @@ class TransactionService {
       timestamp: now,
     );
 
-    // Use a Firestore batch to atomically:
-    // 1. Create the transaction record
-    // 2. Decrement stock for each product
-    final batch = _firestore.batch();
+    // Use a Firestore transaction to atomically:
+    // 1. Verify stock is sufficient
+    // 2. Create the transaction record
+    // 3. Decrement stock for each product
+    await _firestore.runTransaction((tx) async {
+      final productRefs = cartItems.map((item) {
+        return _firestore
+            .collection('stores')
+            .doc(storeId)
+            .collection('products')
+            .doc(item.product.id);
+      }).toList();
 
-    // Add the transaction document
-    batch.set(
-      _transactionsRef(storeId).doc(transactionId),
-      transaction.toMap(),
-    );
+      // Read all products first
+      final snapshots = await Future.wait(productRefs.map((ref) => tx.get(ref)));
 
-    // Decrement stock for each item
-    for (final item in cartItems) {
-      final productRef = _firestore
-          .collection('stores')
-          .doc(storeId)
-          .collection('products')
-          .doc(item.product.id);
+      // Verify stock
+      for (int i = 0; i < cartItems.length; i++) {
+        final snap = snapshots[i];
+        if (!snap.exists) {
+          throw Exception('Product ${cartItems[i].product.name} not found');
+        }
+        final currentStock = snap.data()?['quantityInStock'] as int? ?? 0;
+        if (currentStock < cartItems[i].quantity) {
+          throw Exception('Insufficient stock for ${cartItems[i].product.name}. Available: $currentStock');
+        }
+      }
 
-      batch.update(productRef, {
-        'quantityInStock': FieldValue.increment(-item.quantity),
-      });
-    }
+      // Write transaction
+      tx.set(
+        _transactionsRef(storeId).doc(transactionId),
+        transaction.toMap(),
+      );
 
-    await batch.commit();
+      // Decrement stock
+      for (int i = 0; i < cartItems.length; i++) {
+        tx.update(productRefs[i], {
+          'quantityInStock': FieldValue.increment(-cartItems[i].quantity),
+        });
+      }
+    });
+
     return transaction;
   }
 

@@ -28,9 +28,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 200) {
-      context.read<InventoryProvider>().fetchNextPage();
+    final provider = context.read<InventoryProvider>();
+    if (!provider.isFetchingMore &&
+        _scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent - 200) {
+      provider.fetchNextPage();
     }
   }
 

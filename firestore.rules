@@ -28,8 +28,66 @@ service cloud.firestore {
     function hasRole(storeId, role) {
       let userData = getUserData();
       return userData.storeId == storeId && (
-        userData.role == 'manager' || role in userData.roles
+        userData.role == 'manager' ||
+        (
+          userData.role == 'employee' &&
+          userData.roles is list &&
+          role in userData.roles
+        )
       );
+    }
+
+    function hasOnlyAllowedEmployeeRoles(roles) {
+      return roles is list &&
+        roles.size() > 0 &&
+        roles.hasOnly(['cashier', 'warehouse']);
+    }
+
+    function isValidNewUser() {
+      return request.resource.data.uid == request.auth.uid &&
+        (
+          (
+            request.resource.data.role == 'manager' &&
+            request.resource.data.roles == [] &&
+            request.resource.data.storeId is string &&
+            get(/databases/$(database)/documents/stores/$(request.resource.data.storeId)).data.managerId == request.auth.uid
+          ) ||
+          (
+            request.resource.data.role == 'pending' &&
+            request.resource.data.roles == [] &&
+            request.resource.data.storeId is string
+          )
+        );
+    }
+
+    function isSafeOwnerProfileUpdate() {
+      let diff = request.resource.data.diff(resource.data);
+      return diff.affectedKeys().hasOnly(['displayName', 'photoUrl', 'email']);
+    }
+
+    function isValidManagerUserUpdate() {
+      return request.resource.data.uid == resource.data.uid &&
+        (
+          (
+            request.resource.data.storeId == resource.data.storeId &&
+            request.resource.data.role == 'employee' &&
+            hasOnlyAllowedEmployeeRoles(request.resource.data.roles)
+          ) ||
+          (
+            request.resource.data.storeId == null &&
+            request.resource.data.role == 'pending' &&
+            request.resource.data.roles == []
+          )
+        );
+    }
+
+    function isCashierStockUpdate(storeId) {
+      let diff = request.resource.data.diff(resource.data);
+      return hasRole(storeId, 'cashier') &&
+        diff.affectedKeys().hasOnly(['quantityInStock']) &&
+        request.resource.data.quantityInStock is int &&
+        request.resource.data.quantityInStock >= 0 &&
+        request.resource.data.quantityInStock <= resource.data.quantityInStock;
     }
 
     // ─── Users Collection ─────────────────────────────────────────
@@ -40,10 +98,10 @@ service cloud.firestore {
         isOwner(userId) ||
         (resource.data.storeId != null && isStoreManager(resource.data.storeId))
       );
-      allow create: if isAuthenticated() && isOwner(userId);
+      allow create: if isAuthenticated() && isOwner(userId) && isValidNewUser();
       allow update: if isAuthenticated() && (
-        isOwner(userId) ||
-        isStoreManager(resource.data.storeId)
+        (isOwner(userId) && isSafeOwnerProfileUpdate()) ||
+        (isStoreManager(resource.data.storeId) && isValidManagerUserUpdate())
       );
       allow delete: if false; // No user deletion from client
     }
@@ -62,16 +120,19 @@ service cloud.firestore {
         // Store members can read products
         allow read: if isAuthenticated() && isStoreMember(storeId);
         // Manager and warehouse roles can write products
-        allow create, update: if isAuthenticated() && (
+        allow create, delete: if isAuthenticated() && (
           isStoreManager(storeId) || hasRole(storeId, 'warehouse')
         );
-        allow delete: if isAuthenticated() && isStoreManager(storeId);
+        allow update: if isAuthenticated() && (
+          isStoreManager(storeId) || hasRole(storeId, 'warehouse') ||
+          isCashierStockUpdate(storeId)
+        );
       }
 
       // ─── Transactions Sub-collection ──────────────────────────
       match /transactions/{transactionId} {
-        // Store members can read transactions
-        allow read: if isAuthenticated() && isStoreMember(storeId);
+        // Only managers can read transactions
+        allow read: if isAuthenticated() && isStoreManager(storeId);
         // Cashier and manager can create transactions
         allow create: if isAuthenticated() && (
           isStoreManager(storeId) || hasRole(storeId, 'cashier')

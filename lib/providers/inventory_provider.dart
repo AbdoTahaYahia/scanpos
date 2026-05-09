@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../services/product_service.dart';
+import '../utils/string_extensions.dart';
 
 class InventoryProvider extends ChangeNotifier {
   final ProductService _productService = ProductService();
@@ -135,22 +136,23 @@ class InventoryProvider extends ChangeNotifier {
   }
 
   void _applyFilters() {
-    _filteredProducts = _products.where((product) {
-      // Category filter
-      if (_selectedCategory != null &&
-          product.category != _selectedCategory) {
-        return false;
-      }
-
-      // Search filter
-      if (_searchQuery.isNotEmpty) {
-        final query = _searchQuery.toLowerCase();
-        return product.name.toLowerCase().contains(query) ||
-            product.barcode.toLowerCase().contains(query);
-      }
-
-      return true;
-    }).toList();
+    if (_searchQuery.isNotEmpty) {
+      final query = _searchQuery.normalizedForSearch;
+      _filteredProducts = _allProductsForSearch.where((product) {
+        if (_selectedCategory != null && product.category != _selectedCategory) {
+          return false;
+        }
+        return product.name.normalizedForSearch.contains(query) ||
+            product.barcode.normalizedForSearch.contains(query);
+      }).toList();
+    } else {
+      _filteredProducts = _products.where((product) {
+        if (_selectedCategory != null && product.category != _selectedCategory) {
+          return false;
+        }
+        return true;
+      }).toList();
+    }
   }
 
 }

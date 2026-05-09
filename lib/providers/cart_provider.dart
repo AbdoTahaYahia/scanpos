@@ -22,11 +22,17 @@ class CartProvider extends ChangeNotifier {
 
   /// Add a product to cart. If it already exists, increment quantity.
   void addItem(Product product) {
+    if (product.quantityInStock <= 0) return;
+
     final existingIndex =
         _items.indexWhere((item) => item.product.id == product.id);
 
     if (existingIndex >= 0) {
-      _items[existingIndex].quantity++;
+      if (_items[existingIndex].quantity < product.quantityInStock) {
+        _items[existingIndex].quantity++;
+      } else {
+        return; // Cannot add more than in stock
+      }
     } else {
       _items.add(CartItem(product: product));
     }
@@ -51,8 +57,10 @@ class CartProvider extends ChangeNotifier {
     final index =
         _items.indexWhere((item) => item.product.id == productId);
     if (index >= 0) {
-      _items[index].quantity++;
-      notifyListeners();
+      if (_items[index].quantity < _items[index].product.quantityInStock) {
+        _items[index].quantity++;
+        notifyListeners();
+      }
     }
   }
 

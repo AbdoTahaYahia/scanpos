@@ -273,7 +273,10 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           size: _sizeCtrl.text.trim().isEmpty ? null : _sizeCtrl.text.trim(),
         );
       }
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) {
+        context.read<InventoryProvider>().refreshProducts();
+        Navigator.of(context).pop();
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
