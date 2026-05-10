@@ -44,6 +44,9 @@ class _ScannerScreenState extends State<ScannerScreen>
   int _frameCount = 0;
   List<Product> _textMatchedProducts = [];
   DateTime _lastTextMatchUpdate = DateTime.now();
+  // Cache for normalized product names to avoid recomputing per frame
+  Map<String, String> _normalizedProductNameCache = {};
+  String _lastCachedStoreId = '';
 
   @override
   void initState() {
@@ -149,12 +152,11 @@ class _ScannerScreenState extends State<ScannerScreen>
   }
 
   void _processFrame(CameraImage image) async {
-    if (_isProcessingBarcode || _isProcessingText) return;
-
     _frameCount++;
     
-    // Every 30th frame (roughly once a second), try text scanning
-    if (_frameCount % 30 == 0) {
+    // Every 15th frame (~twice a second at 30fps), try text scanning
+    // Text and barcode processing are independent — they don't block each other
+    if (_frameCount % 15 == 0 && !_isProcessingText) {
       _isProcessingText = true;
       final inputImage = _toInputImage(image);
       if (inputImage == null) {
@@ -164,11 +166,11 @@ class _ScannerScreenState extends State<ScannerScreen>
       try {
         final textResult = await _textRecognizer.processImage(inputImage);
         if (textResult.text.isNotEmpty && mounted) {
-          _handleDetectedText(textResult.text, textResult.blocks);
+          _handleDetectedText(textResult.text);
         }
       } catch (_) {}
       _isProcessingText = false;
-    } else {
+    } else if (!_isProcessingBarcode) {
       // For all other frames, run fast barcode scanning
       _isProcessingBarcode = true;
       final inputImage = _toInputImage(image);
@@ -246,33 +248,42 @@ class _ScannerScreenState extends State<ScannerScreen>
     }
   }
 
-  void _handleDetectedText(String fullText, List<TextBlock> blocks) {
+  /// Refreshes the cached normalized names when inventory changes
+  void _refreshNormalizedCache() {
+    final storeId = context.read<AuthProvider>().appUser?.storeId ?? '';
+    if (storeId == _lastCachedStoreId && _normalizedProductNameCache.isNotEmpty) return;
+    _lastCachedStoreId = storeId;
+    final products = context.read<InventoryProvider>().allProductsForSearch;
+    _normalizedProductNameCache = {
+      for (final p in products) p.id: p.name.normalizedForSearch,
+    };
+  }
+
+  // Pre-compiled regex for word splitting
+  static final _wordSplitRegex = RegExp(r'[\s\-,]+');
+
+  void _handleDetectedText(String fullText) {
     final products = context.read<InventoryProvider>().allProductsForSearch;
     if (products.isEmpty) return;
+
+    // Refresh normalized name cache if needed
+    _refreshNormalizedCache();
 
     final textLower = fullText.normalizedForSearch;
     final scoredProducts = <Product, int>{};
 
     for (final product in products) {
-      final nameLower = product.name.normalizedForSearch;
-      final words = nameLower.split(RegExp(r'[\s\-,]+'))
-          .where((w) => w.length > 2)
-          .toList();
+      // Use cached normalized name instead of recomputing
+      final nameLower = _normalizedProductNameCache[product.id] ?? product.name.normalizedForSearch;
 
       int score = 0;
 
       if (textLower.contains(nameLower)) {
         score += 10;
       } else {
+        final words = nameLower.split(_wordSplitRegex);
         for (final word in words) {
-          if (textLower.contains(word)) score++;
-        }
-      }
-
-      for (final block in blocks) {
-        final blockLower = block.text.normalizedForSearch;
-        if (blockLower.contains(nameLower) || nameLower.contains(blockLower)) {
-          score += 5;
+          if (word.length > 2 && textLower.contains(word)) score++;
         }
       }
 
@@ -301,7 +312,7 @@ class _ScannerScreenState extends State<ScannerScreen>
       if (isIdentical) return;
 
       final now = DateTime.now();
-      if (now.difference(_lastTextMatchUpdate).inMilliseconds < 2000) {
+      if (now.difference(_lastTextMatchUpdate).inMilliseconds < 800) {
         return;
       }
 
