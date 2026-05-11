@@ -99,8 +99,9 @@ service cloud.firestore {
 
     // ─── Stores Collection ────────────────────────────────────────
     match /stores/{storeId} {
-      // Any authenticated user can read a store (needed for invite code lookup)
-      allow read: if isAuthenticated();
+      // Only store members can read store data
+      // Invite code lookup goes through Cloud Function (lookupStoreByInviteCode)
+      allow read: if isAuthenticated() && isStoreMember(storeId);
       // Only the manager can create/update their store
       allow create: if isAuthenticated();
       allow update: if isAuthenticated() && isStoreManager(storeId);

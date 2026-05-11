@@ -110,7 +110,13 @@ class AuthProvider extends ChangeNotifier {
       _state = AuthState.loading;
       notifyListeners();
 
-      final firebaseUser = _authService.currentFirebaseUser!;
+      final firebaseUser = _authService.currentFirebaseUser;
+      if (firebaseUser == null) {
+        _error = 'Session expired. Please sign in again.';
+        _state = AuthState.unauthenticated;
+        notifyListeners();
+        return;
+      }
 
       // Create store
       final store = await _storeService.createStore(
@@ -150,7 +156,12 @@ class AuthProvider extends ChangeNotifier {
         return false;
       }
 
-      final firebaseUser = _authService.currentFirebaseUser!;
+      final firebaseUser = _authService.currentFirebaseUser;
+      if (firebaseUser == null) {
+        _error = 'Session expired. Please sign in again.';
+        notifyListeners();
+        return false;
+      }
 
       // Create user profile with pending role
       final appUser = AppUser(

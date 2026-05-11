@@ -106,12 +106,18 @@ class CartProvider extends ChangeNotifier {
   Future<bool> checkout(AppUser user) async {
     if (_items.isEmpty || _isProcessing) return false;
 
+    final storeId = user.storeId;
+    if (storeId == null) {
+      debugPrint('Checkout failed: user has no storeId');
+      return false;
+    }
+
     try {
       _isProcessing = true;
       notifyListeners();
 
       await _checkoutService.createTransaction(
-        storeId: user.storeId!,
+        storeId: storeId,
         cashierId: user.uid,
         cashierName: user.displayName,
         cartItems: _items,

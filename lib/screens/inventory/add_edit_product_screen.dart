@@ -526,7 +526,9 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                       textInputAction: TextInputAction.next,
                       validator: (v) {
                         if (v == null || v.trim().isEmpty) return 'Required';
-                        if (double.tryParse(v.trim()) == null) return 'Enter valid price';
+                        final price = double.tryParse(v.trim());
+                        if (price == null) return 'Enter valid price';
+                        if (price < 0) return 'Price cannot be negative';
                         return null;
                       },
                     ),
@@ -541,7 +543,9 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                       textInputAction: TextInputAction.next,
                       validator: (v) {
                         if (v == null || v.trim().isEmpty) return 'Required';
-                        if (int.tryParse(v.trim()) == null) return 'Enter valid number';
+                        final qty = int.tryParse(v.trim());
+                        if (qty == null) return 'Enter valid number';
+                        if (qty < 0) return 'Quantity cannot be negative';
                         return null;
                       },
                     ),
@@ -743,6 +747,7 @@ class _TextReadScreenState extends State<_TextReadScreen> {
   bool _ready = false;
   bool _processing = false;
   String _detected = '';
+  int _frameCount = 0;
 
   @override
   void initState() {
@@ -766,6 +771,10 @@ class _TextReadScreenState extends State<_TextReadScreen> {
   }
 
   void _process(CameraImage image) async {
+    // Throttle: only process every 10th frame (~3fps at 30fps camera)
+    _frameCount++;
+    if (_frameCount % 10 != 0) return;
+
     if (_processing) return;
     _processing = true;
     try {
@@ -789,12 +798,17 @@ class _TextReadScreenState extends State<_TextReadScreen> {
             : result.text);
       }
     } catch (_) {}
-    await Future.delayed(const Duration(milliseconds: 500));
     _processing = false;
   }
 
   @override
   void dispose() {
+    // Stop the image stream BEFORE disposing to prevent memory leak
+    try {
+      if (_cam?.value.isStreamingImages == true) {
+        _cam?.stopImageStream();
+      }
+    } catch (_) {}
     _cam?.dispose();
     _textRecognizer.close();
     super.dispose();

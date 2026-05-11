@@ -124,3 +124,38 @@ exports.checkout = onCall(async (request) => {
     throw new HttpsError("internal", error.message);
   }
 });
+
+/**
+ * Secure invite code lookup — allows new users to find a store
+ * without granting broad read access to the stores collection.
+ */
+exports.lookupStoreByInviteCode = onCall(async (request) => {
+  const auth = request.auth;
+  if (!auth) {
+    throw new HttpsError("unauthenticated", "Must be logged in.");
+  }
+
+  const {inviteCode} = request.data;
+  if (!inviteCode || typeof inviteCode !== "string" || inviteCode.trim().length === 0) {
+    throw new HttpsError("invalid-argument", "Invite code is required.");
+  }
+
+  const code = inviteCode.trim().toUpperCase();
+  const snapshot = await db.collection("stores")
+    .where("inviteCode", "==", code)
+    .limit(1)
+    .get();
+
+  if (snapshot.empty) {
+    return {found: false};
+  }
+
+  const storeData = snapshot.docs[0].data();
+  return {
+    found: true,
+    store: {
+      id: storeData.id,
+      name: storeData.name,
+    },
+  };
+});

@@ -153,10 +153,17 @@ class _ScannerScreenState extends State<ScannerScreen>
 
   void _processFrame(CameraImage image) async {
     _frameCount++;
-    
-    // Every 15th frame (~twice a second at 30fps), try text scanning
-    // Text and barcode processing are independent — they don't block each other
-    if (_frameCount % 15 == 0 && !_isProcessingText) {
+
+    // ── Global frame gate ──────────────────────────────────────────
+    // Drop frames aggressively when both processors are busy.
+    // This prevents native BLASTBufferQueue overflow (max frames error).
+    if (_isProcessingBarcode && _isProcessingText) return;
+
+    // Skip every other frame unconditionally to reduce buffer pressure
+    if (_frameCount % 2 != 0) return;
+
+    // Every 30th frame (~once a second at 30fps), try text scanning
+    if (_frameCount % 30 == 0 && !_isProcessingText) {
       _isProcessingText = true;
       final inputImage = _toInputImage(image);
       if (inputImage == null) {
@@ -171,7 +178,7 @@ class _ScannerScreenState extends State<ScannerScreen>
       } catch (_) {}
       _isProcessingText = false;
     } else if (!_isProcessingBarcode) {
-      // For all other frames, run fast barcode scanning
+      // For remaining frames, run fast barcode scanning
       _isProcessingBarcode = true;
       final inputImage = _toInputImage(image);
       if (inputImage == null) {
@@ -411,6 +418,13 @@ class _ScannerScreenState extends State<ScannerScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     WakelockPlus.disable();
+    // Stop the image stream BEFORE disposing to prevent memory leak
+    // from frames arriving after controller is disposed
+    try {
+      if (_cameraController?.value.isStreamingImages == true) {
+        _cameraController?.stopImageStream();
+      }
+    } catch (_) {}
     _cameraController?.dispose();
     _barcodeScanner.close();
     _textRecognizer.close();
@@ -421,8 +435,6 @@ class _ScannerScreenState extends State<ScannerScreen>
 
   @override
   Widget build(BuildContext context) {
-    final cartProvider = context.watch<CartProvider>();
-
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -668,69 +680,83 @@ class _ScannerScreenState extends State<ScannerScreen>
 
             // ─── Cart Section ────────────────────────────────────
             Expanded(
-              child: cartProvider.isEmpty
-                  ? _buildEmptyCart()
-                  : _buildCartList(cartProvider),
+              child: Selector<CartProvider, bool>(
+                selector: (_, cart) => cart.isEmpty,
+                builder: (context, isEmpty, _) => isEmpty
+                    ? _buildEmptyCart()
+                    : _buildCartList(context.read<CartProvider>()),
+              ),
             ),
 
             // ─── Bottom Total & Pay ──────────────────────────────
-            if (!cartProvider.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: const BoxDecoration(
-                  color: AppTheme.white,
-                  border: Border(
-                    top: BorderSide(color: AppTheme.black, width: 2),
-                  ),
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Total',
-                                style: AppTheme.bodySm.copyWith(
-                                  color: AppTheme.onSurfaceVariant,
-                                ),
-                              ),
-                              Text(
-                                _currencyFormat.format(cartProvider.totalAmount),
-                                style: AppTheme.priceDisplay,
-                              ),
-                            ],
-                          ),
-                          Text(
-                            '${cartProvider.itemCount} items',
-                            style: AppTheme.bodyLg.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                      AppStyles.gap16,
-                      SizedBox(
-                        width: double.infinity,
-                        height: 64,
-                        child: PillButton(
-                          label: 'Pay',
-                          icon: Icons.payment_rounded,
-                          onPressed: cartProvider.isProcessing
-                              ? null
-                              : _handleCheckout,
-                          isLoading: cartProvider.isProcessing,
-                          height: 64,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+            // ─── Bottom Total & Pay (rebuilds only when total/count/processing change) ──
+            Selector<CartProvider, ({double total, int count, bool processing, bool empty})>(
+              selector: (_, cart) => (
+                total: cart.totalAmount,
+                count: cart.itemCount,
+                processing: cart.isProcessing,
+                empty: cart.isEmpty,
               ),
+              builder: (context, data, _) {
+                if (data.empty) return const SizedBox.shrink();
+                return Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: const BoxDecoration(
+                    color: AppTheme.white,
+                    border: Border(
+                      top: BorderSide(color: AppTheme.black, width: 2),
+                    ),
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Total',
+                                  style: AppTheme.bodySm.copyWith(
+                                    color: AppTheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                Text(
+                                  _currencyFormat.format(data.total),
+                                  style: AppTheme.priceDisplay,
+                                ),
+                              ],
+                            ),
+                            Text(
+                              '${data.count} items',
+                              style: AppTheme.bodyLg.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                        AppStyles.gap16,
+                        SizedBox(
+                          width: double.infinity,
+                          height: 64,
+                          child: PillButton(
+                            label: 'Pay',
+                            icon: Icons.payment_rounded,
+                            onPressed: data.processing
+                                ? null
+                                : _handleCheckout,
+                            isLoading: data.processing,
+                            height: 64,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
           ],
         ),
       ),

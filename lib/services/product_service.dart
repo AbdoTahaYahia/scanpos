@@ -53,9 +53,13 @@ class ProductService {
     );
   }
 
-  /// Get all products for local search/OCR
-  Future<List<Product>> getAllProducts({required String storeId}) async {
-    final snapshot = await _productsRef(storeId).get();
+  /// Get all products for local search/OCR.
+  /// Capped at [maxLimit] to prevent excessive memory usage.
+  Future<List<Product>> getAllProducts({
+    required String storeId,
+    int maxLimit = 1000,
+  }) async {
+    final snapshot = await _productsRef(storeId).limit(maxLimit).get();
     return snapshot.docs.map((doc) => Product.fromMap(doc.data())).toList();
   }
 
@@ -77,7 +81,7 @@ class ProductService {
     return Product.fromMap(doc.data()!);
   }
 
-  /// Add a new product
+  /// Add a new product with input validation
   Future<Product> addProduct({
     required String storeId,
     required String name,
@@ -87,25 +91,45 @@ class ProductService {
     required String category,
     String? size,
   }) async {
+    // ── Input validation (defense in depth) ──────────────────
+    if (name.trim().isEmpty) {
+      throw ArgumentError('Product name cannot be empty');
+    }
+    if (price < 0) {
+      throw ArgumentError('Price cannot be negative');
+    }
+    if (quantity < 0) {
+      throw ArgumentError('Quantity cannot be negative');
+    }
+
     final productId = _uuid.v4();
 
     final product = Product(
       id: productId,
-      name: name,
+      name: name.trim(),
       price: price,
       quantityInStock: quantity,
-      barcode: barcode,
-      category: category,
+      barcode: barcode.trim(),
+      category: category.trim(),
       storeId: storeId,
-      size: size,
+      size: size?.trim(),
     );
 
     await _productsRef(storeId).doc(productId).set(product.toMap());
     return product;
   }
 
-  /// Update an existing product
+  /// Update an existing product with input validation
   Future<void> updateProduct(Product product) async {
+    if (product.name.trim().isEmpty) {
+      throw ArgumentError('Product name cannot be empty');
+    }
+    if (product.price < 0) {
+      throw ArgumentError('Price cannot be negative');
+    }
+    if (product.quantityInStock < 0) {
+      throw ArgumentError('Quantity cannot be negative');
+    }
     await _productsRef(product.storeId)
         .doc(product.id)
         .update(product.toMap());
