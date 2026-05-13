@@ -151,6 +151,18 @@ class ProductService {
     });
   }
 
+  /// Get products with stock at or below threshold, ordered by quantity ascending
+  Future<List<Product>> getLowStockProducts({
+    required String storeId,
+    int threshold = 5,
+  }) async {
+    final snapshot = await _productsRef(storeId)
+        .where('quantityInStock', isLessThanOrEqualTo: threshold)
+        .orderBy('quantityInStock')
+        .get();
+    return snapshot.docs.map((doc) => Product.fromMap(doc.data())).toList();
+  }
+
   /// Get all unique categories for a store
   Future<List<String>> getCategories(String storeId) async {
     final snapshot = await _productsRef(storeId).get();

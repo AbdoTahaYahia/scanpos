@@ -5,6 +5,7 @@ import '../providers/inventory_provider.dart';
 import '../theme/app_theme.dart';
 import 'scanner/scanner_screen.dart';
 import 'inventory/inventory_screen.dart';
+import 'reports/reports_screen.dart';
 import 'settings/settings_screen.dart';
 
 class AppShell extends StatefulWidget {
@@ -53,6 +54,7 @@ class _AppShellState extends State<AppShell> {
     final screens = <Widget>[
       ScannerScreen(isActive: _currentIndex == 0),
       if (canManageInventory) const InventoryScreen(),
+      if (canManageInventory) const ReportsScreen(),
     ];
 
     final safeIndex = _currentIndex >= screens.length ? 0 : _currentIndex;
@@ -88,6 +90,15 @@ class _AppShellState extends State<AppShell> {
                     label: 'Inventory',
                     isSelected: _currentIndex == 1,
                     onTap: () => setState(() => _currentIndex = 1),
+                  ),
+
+                // Reports Tab (only for manager/warehouse)
+                if (canManageInventory)
+                  _NavItem(
+                    icon: Icons.assessment_rounded,
+                    label: 'Reports',
+                    isSelected: _currentIndex == 2,
+                    onTap: () => setState(() => _currentIndex = 2),
                   ),
               ],
             ),
@@ -132,3 +143,4 @@ class _NavItem extends StatelessWidget {
     );
   }
 }
+

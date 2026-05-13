@@ -9,6 +9,7 @@ import '../../theme/app_styles.dart';
 import '../../widgets/pill_button.dart';
 import '../../widgets/rounded_card.dart';
 import '../sales/sales_history_screen.dart';
+import '../sales/cashier_transactions_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -142,6 +143,22 @@ class SettingsScreen extends StatelessWidget {
                     variant: PillButtonVariant.secondary,
                     onPressed: () => Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const SalesHistoryScreen()),
+                    ),
+                  ),
+                ),
+                AppStyles.gap16,
+              ],
+
+              // My Transactions (Cashier — edit invoices)
+              if (user.isCashier) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: PillButton(
+                    label: 'My Transactions',
+                    icon: Icons.edit_note_rounded,
+                    variant: PillButtonVariant.secondary,
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const CashierTransactionsScreen()),
                     ),
                   ),
                 ),

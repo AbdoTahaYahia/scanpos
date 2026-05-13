@@ -115,17 +115,28 @@ service cloud.firestore {
         allow create, delete: if isAuthenticated() && (
           isStoreManager(storeId) || hasRole(storeId, 'warehouse')
         );
+        // Manager, warehouse, and cashier (for stock adjustment on invoice edit) can update
         allow update: if isAuthenticated() && (
-          isStoreManager(storeId) || hasRole(storeId, 'warehouse')
+          isStoreManager(storeId) || hasRole(storeId, 'warehouse') || hasRole(storeId, 'cashier')
         );
       }
 
       // ─── Transactions Sub-collection ──────────────────────────
       match /transactions/{transactionId} {
-        // Only managers can read transactions
-        allow read: if isAuthenticated() && isStoreManager(storeId);
-        allow create: if false; // Checkout writes must go through Cloud Functions
-        allow update, delete: if false; // Transactions are immutable
+        // Managers can read all transactions; cashiers can read their own
+        allow read: if isAuthenticated() && (
+          isStoreManager(storeId) ||
+          (hasRole(storeId, 'cashier') && resource.data.cashierId == request.auth.uid)
+        );
+        // Cashiers can create transactions (checkout from client)
+        allow create: if isAuthenticated() && (
+          isStoreManager(storeId) || hasRole(storeId, 'cashier')
+        );
+        // Cashiers can update/delete their own transactions (for invoice editing)
+        allow update, delete: if isAuthenticated() && (
+          isStoreManager(storeId) ||
+          (hasRole(storeId, 'cashier') && resource.data.cashierId == request.auth.uid)
+        );
       }
     }
   }

@@ -33,7 +33,10 @@ class _ScannerScreenState extends State<ScannerScreen>
   final BarcodeScanner _barcodeScanner = BarcodeScanner();
   final TextRecognizer _textRecognizer = TextRecognizer();
   final ProductService _productService = ProductService();
-  final _currencyFormat = NumberFormat.currency(symbol: 'EGP ', decimalDigits: 2);
+  final _currencyFormat = NumberFormat.currency(
+    symbol: 'EGP ',
+    decimalDigits: 2,
+  );
   final TextEditingController _searchCtrl = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
 
@@ -162,8 +165,8 @@ class _ScannerScreenState extends State<ScannerScreen>
     // Skip every other frame unconditionally to reduce buffer pressure
     if (_frameCount % 2 != 0) return;
 
-    // Every 30th frame (~once a second at 30fps), try text scanning
-    if (_frameCount % 30 == 0 && !_isProcessingText) {
+    // Every 15th frame (~2 times per second at 30fps), try text scanning
+    if (_frameCount % 15 == 0 && !_isProcessingText) {
       _isProcessingText = true;
       final inputImage = _toInputImage(image);
       if (inputImage == null) {
@@ -258,7 +261,9 @@ class _ScannerScreenState extends State<ScannerScreen>
   /// Refreshes the cached normalized names when inventory changes
   void _refreshNormalizedCache() {
     final storeId = context.read<AuthProvider>().appUser?.storeId ?? '';
-    if (storeId == _lastCachedStoreId && _normalizedProductNameCache.isNotEmpty) return;
+    if (storeId == _lastCachedStoreId && _normalizedProductNameCache.isNotEmpty) {
+      return;
+    }
     _lastCachedStoreId = storeId;
     final products = context.read<InventoryProvider>().allProductsForSearch;
     _normalizedProductNameCache = {
@@ -281,7 +286,9 @@ class _ScannerScreenState extends State<ScannerScreen>
 
     for (final product in products) {
       // Use cached normalized name instead of recomputing
-      final nameLower = _normalizedProductNameCache[product.id] ?? product.name.normalizedForSearch;
+      final nameLower =
+          _normalizedProductNameCache[product.id] ??
+          product.name.normalizedForSearch;
 
       int score = 0;
 
@@ -302,7 +309,7 @@ class _ScannerScreenState extends State<ScannerScreen>
     if (scoredProducts.isNotEmpty && mounted) {
       final sortedEntries = scoredProducts.entries.toList()
         ..sort((a, b) => b.value.compareTo(a.value));
-      
+
       final topMatches = sortedEntries.take(3).map((e) => e.key).toList();
 
       bool isIdentical = false;
@@ -319,7 +326,7 @@ class _ScannerScreenState extends State<ScannerScreen>
       if (isIdentical) return;
 
       final now = DateTime.now();
-      if (now.difference(_lastTextMatchUpdate).inMilliseconds < 800) {
+      if (now.difference(_lastTextMatchUpdate).inMilliseconds < 300) {
         return;
       }
 
@@ -401,13 +408,15 @@ class _ScannerScreenState extends State<ScannerScreen>
     if (confirmed == true && mounted) {
       final success = await cartProvider.checkout(user);
       if (mounted) {
+        final errorMsg = cartProvider.lastCheckoutError;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               success
                   ? 'Sale completed successfully!'
-                  : 'Failed to process sale. Please try again.',
+                  : 'Failed: ${errorMsg ?? 'Unknown error'}',
             ),
+            duration: const Duration(seconds: 5),
           ),
         );
       }
@@ -447,8 +456,13 @@ class _ScannerScreenState extends State<ScannerScreen>
                   Text('Scanner', style: AppTheme.headlineLg),
                   Builder(
                     builder: (context) => IconButton(
-                      icon: const Icon(Icons.menu_rounded, color: AppTheme.black),
-                      onPressed: () => context.findRootAncestorStateOfType<ScaffoldState>()?.openDrawer(),
+                      icon: const Icon(
+                        Icons.menu_rounded,
+                        color: AppTheme.black,
+                      ),
+                      onPressed: () => context
+                          .findRootAncestorStateOfType<ScaffoldState>()
+                          ?.openDrawer(),
                     ),
                   ),
                 ],
@@ -473,13 +487,25 @@ class _ScannerScreenState extends State<ScannerScreen>
                     fit: StackFit.expand,
                     children: [
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(AppTheme.radiusMd - 2),
+                        borderRadius: BorderRadius.circular(
+                          AppTheme.radiusMd - 2,
+                        ),
                         child: _isCameraReady && _cameraController != null
                             ? FittedBox(
                                 fit: BoxFit.cover,
                                 child: SizedBox(
-                                  width: _cameraController!.value.previewSize?.height ?? 640,
-                                  height: _cameraController!.value.previewSize?.width ?? 480,
+                                  width:
+                                      _cameraController!
+                                          .value
+                                          .previewSize
+                                          ?.height ??
+                                      640,
+                                  height:
+                                      _cameraController!
+                                          .value
+                                          .previewSize
+                                          ?.width ??
+                                      480,
                                   child: CameraPreview(_cameraController!),
                                 ),
                               )
@@ -498,12 +524,16 @@ class _ScannerScreenState extends State<ScannerScreen>
                           bottom: 12,
                           right: 12,
                           child: CircleAvatar(
-                            backgroundColor: AppTheme.black.withValues(alpha: 0.5),
+                            backgroundColor: AppTheme.black.withValues(
+                              alpha: 0.5,
+                            ),
                             radius: 20,
                             child: IconButton(
                               padding: EdgeInsets.zero,
                               icon: Icon(
-                                _isFlashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+                                _isFlashOn
+                                    ? Icons.flash_on_rounded
+                                    : Icons.flash_off_rounded,
                                 color: AppTheme.white,
                                 size: 20,
                               ),
@@ -529,22 +559,33 @@ class _ScannerScreenState extends State<ScannerScreen>
                   }
                   final query = textEditingValue.text.normalizedForSearch;
                   // Access all products loaded for search purposes, not just the paginated list
-                  final products = context.read<InventoryProvider>().allProductsForSearch;
-                  
+                  final products = context
+                      .read<InventoryProvider>()
+                      .allProductsForSearch;
+
                   // Return up to 3 matches
                   return products
-                      .where((p) => p.name.normalizedForSearch.contains(query) || p.barcode.normalizedForSearch.contains(query))
+                      .where(
+                        (p) =>
+                            p.name.normalizedForSearch.contains(query) ||
+                            p.barcode.normalizedForSearch.contains(query),
+                      )
                       .take(3);
                 },
                 displayStringForOption: (Product option) => option.name,
                 onSelected: (Product selection) {
                   final added = context.read<CartProvider>().addItem(selection);
                   if (added) {
-                    ScanFeedbackOverlay.show(context, productName: selection.name);
+                    ScanFeedbackOverlay.show(
+                      context,
+                      productName: selection.name,
+                    );
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Product out of stock: ${selection.name}'),
+                        content: Text(
+                          'Product out of stock: ${selection.name}',
+                        ),
                         backgroundColor: AppTheme.error,
                       ),
                     );
@@ -555,15 +596,20 @@ class _ScannerScreenState extends State<ScannerScreen>
                     _searchFocusNode.unfocus();
                   });
                 },
-                fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-                  return PillInput(
-                    controller: controller,
-                    focusNode: focusNode,
-                    hint: 'Search by name or barcode...',
-                    prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.outline, size: 22),
-                    onSubmitted: (_) => onEditingComplete(),
-                  );
-                },
+                fieldViewBuilder:
+                    (context, controller, focusNode, onEditingComplete) {
+                      return PillInput(
+                        controller: controller,
+                        focusNode: focusNode,
+                        hint: 'Search by name or barcode...',
+                        prefixIcon: const Icon(
+                          Icons.search_rounded,
+                          color: AppTheme.outline,
+                          size: 22,
+                        ),
+                        onSubmitted: (_) => onEditingComplete(),
+                      );
+                    },
                 optionsViewBuilder: (context, onSelected, options) {
                   return Align(
                     alignment: Alignment.topLeft,
@@ -596,12 +642,15 @@ class _ScannerScreenState extends State<ScannerScreen>
                                   vertical: 12,
                                 ),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     Expanded(
                                       child: Text(
                                         option.name,
-                                        style: AppTheme.bodyLg.copyWith(fontWeight: FontWeight.w700),
+                                        style: AppTheme.bodyLg.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
@@ -635,18 +684,29 @@ class _ScannerScreenState extends State<ScannerScreen>
                         onTap: () => _addTextMatchedProduct(matchedProduct),
                         child: Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: AppTheme.black,
-                            borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.radiusFull,
+                            ),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.auto_awesome_rounded, color: AppTheme.white, size: 20),
+                              const Icon(
+                                Icons.auto_awesome_rounded,
+                                color: AppTheme.white,
+                                size: 20,
+                              ),
                               AppStyles.gapW8,
                               Expanded(
                                 child: Text(
-                                  matchedProduct.name.replaceAll('\n', ' ').trim(),
+                                  matchedProduct.name
+                                      .replaceAll('\n', ' ')
+                                      .trim(),
                                   style: AppTheme.bodyLg.copyWith(
                                     color: AppTheme.white,
                                     fontWeight: FontWeight.w700,
@@ -657,14 +717,21 @@ class _ScannerScreenState extends State<ScannerScreen>
                               ),
                               AppStyles.gapW8,
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
                                 decoration: BoxDecoration(
                                   color: AppTheme.white,
-                                  borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                                  borderRadius: BorderRadius.circular(
+                                    AppTheme.radiusFull,
+                                  ),
                                 ),
                                 child: Text(
                                   '+ Add',
-                                  style: AppTheme.labelBold.copyWith(color: AppTheme.black),
+                                  style: AppTheme.labelBold.copyWith(
+                                    color: AppTheme.black,
+                                  ),
                                 ),
                               ),
                             ],
@@ -690,7 +757,10 @@ class _ScannerScreenState extends State<ScannerScreen>
 
             // ─── Bottom Total & Pay ──────────────────────────────
             // ─── Bottom Total & Pay (rebuilds only when total/count/processing change) ──
-            Selector<CartProvider, ({double total, int count, bool processing, bool empty})>(
+            Selector<
+              CartProvider,
+              ({double total, int count, bool processing, bool empty})
+            >(
               selector: (_, cart) => (
                 total: cart.totalAmount,
                 count: cart.itemCount,
@@ -744,9 +814,7 @@ class _ScannerScreenState extends State<ScannerScreen>
                           child: PillButton(
                             label: 'Pay',
                             icon: Icons.payment_rounded,
-                            onPressed: data.processing
-                                ? null
-                                : _handleCheckout,
+                            onPressed: data.processing ? null : _handleCheckout,
                             isLoading: data.processing,
                             height: 64,
                           ),
@@ -785,16 +853,12 @@ class _ScannerScreenState extends State<ScannerScreen>
           AppStyles.gap16,
           Text(
             'Cart is empty',
-            style: AppTheme.headlineMd.copyWith(
-              color: AppTheme.outline,
-            ),
+            style: AppTheme.headlineMd.copyWith(color: AppTheme.outline),
           ),
           AppStyles.gap8,
           Text(
             'Scan a barcode or point at product text',
-            style: AppTheme.bodySm.copyWith(
-              color: AppTheme.outline,
-            ),
+            style: AppTheme.bodySm.copyWith(color: AppTheme.outline),
           ),
         ],
       ),
@@ -811,8 +875,7 @@ class _ScannerScreenState extends State<ScannerScreen>
         return Dismissible(
           key: ValueKey(item.product.id),
           direction: DismissDirection.endToStart,
-          onDismissed: (_) =>
-              cartProvider.removeItem(item.product.id),
+          onDismissed: (_) => cartProvider.removeItem(item.product.id),
           background: Container(
             alignment: Alignment.centerRight,
             padding: const EdgeInsets.only(right: 24),

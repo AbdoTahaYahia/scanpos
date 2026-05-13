@@ -33,6 +33,26 @@ class SaleTransaction {
     };
   }
 
+  SaleTransaction copyWith({
+    String? id,
+    String? storeId,
+    String? cashierId,
+    String? cashierName,
+    List<TransactionItem>? items,
+    double? totalAmount,
+    DateTime? timestamp,
+  }) {
+    return SaleTransaction(
+      id: id ?? this.id,
+      storeId: storeId ?? this.storeId,
+      cashierId: cashierId ?? this.cashierId,
+      cashierName: cashierName ?? this.cashierName,
+      items: items ?? this.items,
+      totalAmount: totalAmount ?? this.totalAmount,
+      timestamp: timestamp ?? this.timestamp,
+    );
+  }
+
   factory SaleTransaction.fromMap(Map<String, dynamic> map) {
     return SaleTransaction(
       id: map['id'] as String,

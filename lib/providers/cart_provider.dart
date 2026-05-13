@@ -12,6 +12,9 @@ class CartProvider extends ChangeNotifier {
   final bool _enableFeedback;
   final List<CartItem> _items = [];
   bool _isProcessing = false;
+  String? _lastCheckoutError;
+
+  String? get lastCheckoutError => _lastCheckoutError;
 
   CartProvider({
     bool enableFeedback = true,
@@ -128,7 +131,9 @@ class CartProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
+      debugPrint('Checkout failed: $e');
       _isProcessing = false;
+      _lastCheckoutError = e.toString();
       notifyListeners();
       return false;
     }
