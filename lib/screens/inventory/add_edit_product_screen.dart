@@ -141,8 +141,18 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: PillButton(
-                      label: 'Edit Existing Product',
+                      label: 'Add to Stock',
+                      icon: Icons.add_box_rounded,
+                      onPressed: () => Navigator.pop(ctx, 'restock'),
+                    ),
+                  ),
+                  AppStyles.gap12,
+                  SizedBox(
+                    width: double.infinity,
+                    child: PillButton(
+                      label: 'Edit Details',
                       icon: Icons.edit_rounded,
+                      variant: PillButtonVariant.secondary,
                       onPressed: () => Navigator.pop(ctx, 'edit'),
                     ),
                   ),
@@ -150,7 +160,8 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: PillButton(
-                      label: 'Use Info for New Product',
+                      label: 'Copy Details',
+                      icon: Icons.copy_rounded,
                       variant: PillButtonVariant.secondary,
                       onPressed: () => Navigator.pop(ctx, 'fill'),
                     ),
@@ -171,7 +182,10 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
 
           if (!mounted) return;
 
-          if (action == 'edit') {
+          if (action == 'restock') {
+            await _showRestockDialog(existing);
+            return;
+          } else if (action == 'edit') {
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
                 builder: (_) => AddEditProductScreen(product: existing),
@@ -247,6 +261,111 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     });
   }
 
+  Future<void> _showRestockDialog(Product existing) async {
+    final controller = TextEditingController();
+    final confirmed = await showDialog<int>(
+      context: context,
+      builder: (ctx) => Dialog(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Restock "${existing.name}"', style: AppTheme.headlineMd),
+              AppStyles.gap8,
+              Text(
+                'Current stock: ${existing.quantityInStock} units. '
+                'Enter the quantity you want to add to the existing stock:',
+                style: AppTheme.bodySm.copyWith(color: AppTheme.onSurfaceVariant),
+              ),
+              AppStyles.gap16,
+              TextField(
+                controller: controller,
+                keyboardType: TextInputType.number,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: 'e.g. 50',
+                  suffixText: 'units',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                  ),
+                ),
+              ),
+              AppStyles.gap24,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel', style: TextStyle(color: AppTheme.outline)),
+                  ),
+                  AppStyles.gapW12,
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.black,
+                      foregroundColor: AppTheme.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                      ),
+                    ),
+                    onPressed: () {
+                      final qty = int.tryParse(controller.text.trim());
+                      if (qty == null || qty <= 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter a valid positive number')),
+                        );
+                        return;
+                      }
+                      Navigator.pop(ctx, qty);
+                    },
+                    child: const Text('Add Stock'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed != null && confirmed > 0 && mounted) {
+      setState(() {
+        _isSaving = true;
+      });
+      try {
+        final newQty = existing.quantityInStock + confirmed;
+        final updated = existing.copyWith(
+          quantityInStock: newQty,
+          initialQuantity: newQty, // Update baseline!
+        );
+        await _productService.updateProduct(updated);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Successfully added $confirmed units. New stock: $newQty'),
+              backgroundColor: AppTheme.black,
+            ),
+          );
+          context.read<InventoryProvider>().refreshProducts();
+          Navigator.of(context).pop(); // Exit Add/Edit screen
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error updating stock: $e')),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isSaving = false;
+          });
+        }
+      }
+    }
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
@@ -257,6 +376,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           name: _nameCtrl.text.trim(),
           price: double.parse(_priceCtrl.text.trim()),
           quantityInStock: int.parse(_qtyCtrl.text.trim()),
+          initialQuantity: int.parse(_qtyCtrl.text.trim()),
           barcode: _barcodeCtrl.text.trim(),
           category: _categoryCtrl.text.trim(),
           size: _sizeCtrl.text.trim().isEmpty ? null : _sizeCtrl.text.trim(),

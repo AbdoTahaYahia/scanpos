@@ -129,4 +129,16 @@ class StoreService {
       'roles': [],
     });
   }
+
+  /// Update store low stock threshold settings (cloud persistence)
+  Future<void> updateStoreLowStockSettings(
+    String storeId,
+    int threshold,
+    String thresholdType,
+  ) async {
+    await _firestore.collection('stores').doc(storeId).update({
+      'lowStockThreshold': threshold,
+      'lowStockThresholdType': thresholdType,
+    });
+  }
 }

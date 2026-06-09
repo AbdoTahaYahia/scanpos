@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../models/product.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/product_service.dart';
+import '../../services/store_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_styles.dart';
 import '../../widgets/rounded_card.dart';
@@ -17,16 +18,50 @@ class ReportsScreen extends StatefulWidget {
 
 class _ReportsScreenState extends State<ReportsScreen> {
   final ProductService _productService = ProductService();
+  final StoreService _storeService = StoreService();
   final _currencyFormat = NumberFormat.currency(symbol: 'EGP ', decimalDigits: 2);
 
   List<Product> _lowStockProducts = [];
   bool _isLoading = true;
   int _threshold = 5;
+  String _thresholdType = 'units'; // 'units' or 'percent'
 
   @override
   void initState() {
     super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final storeId = context.read<AuthProvider>().appUser?.storeId;
+    if (storeId == null) {
+      _loadLowStock();
+      return;
+    }
+
+    try {
+      final store = await _storeService.getStore(storeId);
+      if (store != null && mounted) {
+        setState(() {
+          _threshold = store.lowStockThreshold;
+          _thresholdType = store.lowStockThresholdType;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading settings from cloud: $e');
+    }
     _loadLowStock();
+  }
+
+  Future<void> _saveSettings() async {
+    final storeId = context.read<AuthProvider>().appUser?.storeId;
+    if (storeId == null) return;
+
+    try {
+      await _storeService.updateStoreLowStockSettings(storeId, _threshold, _thresholdType);
+    } catch (e) {
+      debugPrint('Error saving settings to cloud: $e');
+    }
   }
 
   Future<void> _loadLowStock() async {
@@ -36,10 +71,25 @@ class _ReportsScreenState extends State<ReportsScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final products = await _productService.getLowStockProducts(
-        storeId: storeId,
-        threshold: _threshold,
-      );
+      List<Product> products;
+      if (_thresholdType == 'units') {
+        products = await _productService.getLowStockProducts(
+          storeId: storeId,
+          threshold: _threshold,
+        );
+      } else {
+        // Percentage based: fetch all products and filter client-side
+        final allProducts = await _productService.getAllProducts(storeId: storeId);
+        products = allProducts.where((p) {
+          final initialQty = p.initialQuantity > 0 ? p.initialQuantity : 1;
+          final percent = (p.quantityInStock / initialQty) * 100;
+          return percent <= _threshold;
+        }).toList();
+
+        // Sort by quantityInStock ascending
+        products.sort((a, b) => a.quantityInStock.compareTo(b.quantityInStock));
+      }
+
       if (mounted) {
         setState(() {
           _lowStockProducts = products;
@@ -113,61 +163,94 @@ class _ReportsScreenState extends State<ReportsScreen> {
             Padding(
               padding: AppStyles.paddingHorizontal,
               child: RoundedCard(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Icon(Icons.tune_rounded, color: AppTheme.black, size: 20),
-                    AppStyles.gapW12,
-                    Expanded(
-                      child: Text(
-                        'Low stock threshold',
-                        style: AppTheme.bodySm.copyWith(fontWeight: FontWeight.w600),
-                      ),
+                    // Mode Selector ( ≤ vs % )
+                    Row(
+                      children: [
+                        _buildTypeChip('units', ' ≤ '),
+                        AppStyles.gapW8,
+                        _buildTypeChip('percent', ' % '),
+                      ],
                     ),
-                    // Decrease
-                    GestureDetector(
-                      onTap: _threshold > 1
-                          ? () {
-                              setState(() => _threshold--);
-                              _loadLowStock();
-                            }
-                          : null,
-                      child: Container(
-                        width: 32, height: 32,
-                        decoration: BoxDecoration(
-                          color: _threshold > 1 ? AppTheme.black : AppTheme.surfaceContainer,
-                          shape: BoxShape.circle,
+                    // Adjuster ( [-] [value] [+] )
+                    Row(
+                      children: [
+                        // Decrease
+                        GestureDetector(
+                          onTap: _threshold > 1
+                              ? () {
+                                  setState(() => _threshold--);
+                                  _saveSettings();
+                                  _loadLowStock();
+                                }
+                              : null,
+                          child: Container(
+                            width: 32, height: 32,
+                            decoration: BoxDecoration(
+                              color: _threshold > 1 ? AppTheme.black : AppTheme.surfaceContainer,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.remove,
+                              size: 16,
+                              color: _threshold > 1 ? AppTheme.white : AppTheme.outline,
+                            ),
+                          ),
                         ),
-                        child: Icon(
-                          Icons.remove,
-                          size: 16,
-                          color: _threshold > 1 ? AppTheme.white : AppTheme.outline,
+                        // Clickable value display
+                        GestureDetector(
+                          onTap: _showEditThresholdDialog,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppTheme.surfaceContainer,
+                              borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                              border: Border.all(color: AppTheme.outlineVariant),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '≤ $_threshold${_thresholdType == 'percent' ? '%' : ''}',
+                                  style: AppTheme.headlineMd.copyWith(fontSize: 18),
+                                ),
+                                AppStyles.gapW4,
+                                const Icon(Icons.edit_outlined, size: 12, color: AppTheme.outline),
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        '≤ $_threshold',
-                        style: AppTheme.headlineMd,
-                      ),
-                    ),
-                    // Increase
-                    GestureDetector(
-                      onTap: _threshold < 100
-                          ? () {
-                              setState(() => _threshold++);
-                              _loadLowStock();
-                            }
-                          : null,
-                      child: Container(
-                        width: 32, height: 32,
-                        decoration: const BoxDecoration(
-                          color: AppTheme.black,
-                          shape: BoxShape.circle,
+                        // Increase
+                        GestureDetector(
+                          onTap: (_thresholdType == 'percent' && _threshold >= 100)
+                              ? null
+                              : () {
+                                  setState(() => _threshold++);
+                                  _saveSettings();
+                                  _loadLowStock();
+                                },
+                          child: Container(
+                            width: 32, height: 32,
+                            decoration: BoxDecoration(
+                              color: (_thresholdType == 'percent' && _threshold >= 100)
+                                  ? AppTheme.surfaceContainer
+                                  : AppTheme.black,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.add,
+                              size: 16,
+                              color: (_thresholdType == 'percent' && _threshold >= 100)
+                                  ? AppTheme.outline
+                                  : AppTheme.white,
+                            ),
+                          ),
                         ),
-                        child: const Icon(Icons.add, size: 16, color: AppTheme.white),
-                      ),
+                      ],
                     ),
                   ],
                 ),
@@ -208,6 +291,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                               return _LowStockProductCard(
                                 product: product,
                                 currencyFormat: _currencyFormat,
+                                showPercentInfo: _thresholdType == 'percent',
                               );
                             },
                           ),
@@ -216,6 +300,127 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTypeChip(String type, String label) {
+    final isSelected = _thresholdType == type;
+    return GestureDetector(
+      onTap: () {
+        if (_thresholdType != type) {
+          setState(() {
+            _thresholdType = type;
+            if (type == 'percent' && _threshold > 100) {
+              _threshold = 100;
+            }
+          });
+          _saveSettings();
+          _loadLowStock();
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.black : AppTheme.surfaceContainer,
+          borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+          border: Border.all(
+            color: isSelected ? AppTheme.black : AppTheme.outlineVariant,
+          ),
+        ),
+        child: Text(
+          label,
+          style: AppTheme.labelBold.copyWith(
+            color: isSelected ? AppTheme.white : AppTheme.onSurfaceVariant,
+            fontSize: 10,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showEditThresholdDialog() {
+    final controller = TextEditingController(text: _threshold.toString());
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _thresholdType == 'percent' ? 'Edit Low Stock Percentage' : 'Edit Low Stock Units',
+                  style: AppTheme.headlineMd,
+                ),
+                AppStyles.gap8,
+                Text(
+                  _thresholdType == 'percent'
+                      ? 'Enter the required percentage (1 to 100)'
+                      : 'Enter the required number of units (1 or more)',
+                  style: AppTheme.bodySm.copyWith(color: AppTheme.onSurfaceVariant),
+                ),
+                AppStyles.gap16,
+                TextField(
+                  controller: controller,
+                  keyboardType: TextInputType.number,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText: _thresholdType == 'percent' ? 'e.g. 10' : 'e.g. 5',
+                    suffixText: _thresholdType == 'percent' ? '%' : 'units',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                    ),
+                  ),
+                ),
+                AppStyles.gap24,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Cancel', style: TextStyle(color: AppTheme.outline)),
+                    ),
+                    AppStyles.gapW12,
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.black,
+                        foregroundColor: AppTheme.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                        ),
+                      ),
+                      onPressed: () {
+                        final val = int.tryParse(controller.text.trim());
+                        if (val == null || val <= 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Please enter a valid positive number')),
+                          );
+                          return;
+                        }
+                        if (_thresholdType == 'percent' && val > 100) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Percentage cannot exceed 100%')),
+                          );
+                          return;
+                        }
+                        Navigator.pop(ctx);
+                        setState(() {
+                          _threshold = val;
+                        });
+                        _saveSettings();
+                        _loadLowStock();
+                      },
+                      child: const Text('Save'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -237,7 +442,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
           Text('All stocked up!', style: AppTheme.headlineMd.copyWith(color: AppTheme.outline)),
           AppStyles.gap8,
           Text(
-            'No products below $_threshold units',
+            _thresholdType == 'percent'
+                ? 'No products below $_threshold% of initial stock'
+                : 'No products below $_threshold units',
             style: AppTheme.bodySm.copyWith(color: AppTheme.outline),
           ),
         ],
@@ -300,10 +507,12 @@ class _SummaryCard extends StatelessWidget {
 class _LowStockProductCard extends StatelessWidget {
   final Product product;
   final NumberFormat currencyFormat;
+  final bool showPercentInfo;
 
   const _LowStockProductCard({
     required this.product,
     required this.currencyFormat,
+    required this.showPercentInfo,
   });
 
   @override
@@ -349,29 +558,48 @@ class _LowStockProductCard extends StatelessWidget {
                 Row(
                   children: [
                     if (product.category.isNotEmpty) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppTheme.surfaceContainer,
-                          borderRadius: BorderRadius.circular(AppTheme.radiusFull),
-                        ),
-                        child: Text(
-                          product.category,
-                          style: AppTheme.labelBold.copyWith(
-                            color: AppTheme.onSurfaceVariant,
-                            fontSize: 10,
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppTheme.surfaceContainer,
+                            borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                          ),
+                          child: Text(
+                            product.category,
+                            style: AppTheme.labelBold.copyWith(
+                              color: AppTheme.onSurfaceVariant,
+                              fontSize: 10,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ),
                       AppStyles.gapW8,
                     ],
-                    Text(
-                      product.barcode,
-                      style: AppTheme.bodySm.copyWith(
-                        color: AppTheme.outline,
-                        fontSize: 11,
+                    Flexible(
+                      child: Text(
+                        product.barcode,
+                        style: AppTheme.bodySm.copyWith(
+                          color: AppTheme.outline,
+                          fontSize: 11,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    if (showPercentInfo) ...[
+                      AppStyles.gapW8,
+                      Text(
+                        '(${((product.quantityInStock / (product.initialQuantity > 0 ? product.initialQuantity : 1)) * 100).toStringAsFixed(0)}% of ${product.initialQuantity})',
+                        style: AppTheme.bodySm.copyWith(
+                          color: AppTheme.outline,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ],

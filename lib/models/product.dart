@@ -3,6 +3,7 @@ class Product {
   final String name;
   final double price;
   final int quantityInStock;
+  final int initialQuantity;
   final String barcode;
   final String category;
   final String storeId;
@@ -13,17 +14,19 @@ class Product {
     required this.name,
     required this.price,
     required this.quantityInStock,
+    int? initialQuantity,
     required this.barcode,
     required this.category,
     required this.storeId,
     this.size,
-  });
+  }) : initialQuantity = initialQuantity ?? quantityInStock;
 
   Product copyWith({
     String? id,
     String? name,
     double? price,
     int? quantityInStock,
+    int? initialQuantity,
     String? barcode,
     String? category,
     String? storeId,
@@ -34,6 +37,7 @@ class Product {
       name: name ?? this.name,
       price: price ?? this.price,
       quantityInStock: quantityInStock ?? this.quantityInStock,
+      initialQuantity: initialQuantity ?? this.initialQuantity,
       barcode: barcode ?? this.barcode,
       category: category ?? this.category,
       storeId: storeId ?? this.storeId,
@@ -47,6 +51,7 @@ class Product {
       'name': name,
       'price': price,
       'quantityInStock': quantityInStock,
+      'initialQuantity': initialQuantity,
       'barcode': barcode,
       'category': category,
       'storeId': storeId,
@@ -55,11 +60,13 @@ class Product {
   }
 
   factory Product.fromMap(Map<String, dynamic> map) {
+    final qty = map['quantityInStock'] as int;
     return Product(
       id: map['id'] as String,
       name: map['name'] as String,
       price: (map['price'] as num).toDouble(),
-      quantityInStock: map['quantityInStock'] as int,
+      quantityInStock: qty,
+      initialQuantity: map['initialQuantity'] as int? ?? qty,
       barcode: map['barcode'] as String,
       category: map['category'] as String,
       storeId: map['storeId'] as String,

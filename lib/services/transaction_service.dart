@@ -1,11 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import '../models/transaction.dart';
 import '../models/cart_item.dart';
 
 class TransactionService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseFunctions _functions = FirebaseFunctions.instance;
 
   /// Collection reference for transactions in a store
   CollectionReference<Map<String, dynamic>> _transactionsRef(String storeId) {

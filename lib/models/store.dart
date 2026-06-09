@@ -6,6 +6,8 @@ class Store {
   final String managerId;
   final String inviteCode;
   final DateTime createdAt;
+  final int lowStockThreshold;
+  final String lowStockThresholdType;
 
   Store({
     required this.id,
@@ -13,6 +15,8 @@ class Store {
     required this.managerId,
     required this.inviteCode,
     required this.createdAt,
+    this.lowStockThreshold = 5,
+    this.lowStockThresholdType = 'units',
   });
 
   Map<String, dynamic> toMap() {
@@ -22,6 +26,8 @@ class Store {
       'managerId': managerId,
       'inviteCode': inviteCode,
       'createdAt': Timestamp.fromDate(createdAt),
+      'lowStockThreshold': lowStockThreshold,
+      'lowStockThresholdType': lowStockThresholdType,
     };
   }
 
@@ -32,6 +38,8 @@ class Store {
       managerId: map['managerId'] as String,
       inviteCode: map['inviteCode'] as String,
       createdAt: (map['createdAt'] as Timestamp).toDate(),
+      lowStockThreshold: map['lowStockThreshold'] as int? ?? 5,
+      lowStockThresholdType: map['lowStockThresholdType'] as String? ?? 'units',
     );
   }
 }

@@ -109,6 +109,7 @@ class ProductService {
       name: name.trim(),
       price: price,
       quantityInStock: quantity,
+      initialQuantity: quantity,
       barcode: barcode.trim(),
       category: category.trim(),
       storeId: storeId,

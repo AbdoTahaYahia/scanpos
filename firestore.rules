@@ -104,7 +104,10 @@ service cloud.firestore {
       allow read: if isAuthenticated() && isStoreMember(storeId);
       // Only the manager can create/update their store
       allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && isStoreManager(storeId);
+      allow update: if isAuthenticated() && (
+        isStoreManager(storeId) ||
+        (isStoreMember(storeId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lowStockThreshold', 'lowStockThresholdType']))
+      );
       allow delete: if false;
 
       // ─── Products Sub-collection ──────────────────────────────
