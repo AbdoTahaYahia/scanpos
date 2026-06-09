@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../models/app_user.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/store_service.dart';
@@ -99,15 +100,20 @@ class SettingsScreen extends StatelessWidget {
                       AppStyles.gap16,
                       Row(
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('INVITE CODE', style: AppTheme.labelBold.copyWith(color: AppTheme.onSurfaceVariant)),
-                              AppStyles.gap4,
-                              Text(store.inviteCode, style: AppTheme.headlineMd.copyWith(letterSpacing: 4)),
-                            ],
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('INVITE CODE', style: AppTheme.labelBold.copyWith(color: AppTheme.onSurfaceVariant)),
+                                AppStyles.gap4,
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(store.inviteCode, style: AppTheme.headlineMd.copyWith(letterSpacing: 4)),
+                                ),
+                              ],
+                            ),
                           ),
-                          const Spacer(),
                           IconButton(
                             icon: const Icon(Icons.copy_rounded),
                             onPressed: () {
@@ -173,6 +179,87 @@ class SettingsScreen extends StatelessWidget {
                 _TeamSection(storeId: store!.id),
                 AppStyles.gap24,
               ],
+
+              // Contact Us
+              Text('CONTACT US', style: AppTheme.labelBold.copyWith(color: AppTheme.onSurfaceVariant)),
+              AppStyles.gap12,
+              RoundedCard(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    // Portfolio link
+                    InkWell(
+                      onTap: () => launchUrl(
+                        Uri.parse('https://abdelhalim-portfolio.web.app/'),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: AppTheme.black,
+                                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                              ),
+                              child: const Icon(Icons.language_rounded, color: AppTheme.white, size: 20),
+                            ),
+                            AppStyles.gapW12,
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Portfolio', style: AppTheme.bodyLg.copyWith(fontWeight: FontWeight.w600)),
+                                  Text('abdelhalim-portfolio.web.app', style: AppTheme.bodySm.copyWith(color: AppTheme.onSurfaceVariant, fontSize: 11)),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.open_in_new_rounded, size: 18, color: AppTheme.onSurfaceVariant),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const Divider(height: 24),
+                    // WhatsApp button
+                    InkWell(
+                      onTap: () => launchUrl(
+                        Uri.parse('https://wa.me/201125055647'),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF25D366),
+                                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                              ),
+                              child: const Icon(Icons.chat_rounded, color: AppTheme.white, size: 20),
+                            ),
+                            AppStyles.gapW12,
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('WhatsApp', style: AppTheme.bodyLg.copyWith(fontWeight: FontWeight.w600)),
+                                  Text('+201125055647', style: AppTheme.bodySm.copyWith(color: AppTheme.onSurfaceVariant, fontSize: 11)),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.open_in_new_rounded, size: 18, color: AppTheme.onSurfaceVariant),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              AppStyles.gap24,
 
               // Sign Out
               SizedBox(
