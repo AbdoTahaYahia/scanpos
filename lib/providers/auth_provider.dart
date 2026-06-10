@@ -23,6 +23,7 @@ class AuthProvider extends ChangeNotifier {
   Store? _store;
   String? _error;
   StreamSubscription? _userSubscription;
+  StreamSubscription? _storeSubscription;
 
   AuthState get state => _state;
   AppUser? get appUser => _appUser;
@@ -62,10 +63,13 @@ class AuthProvider extends ChangeNotifier {
 
   void _listenToUser(String uid) {
     _userSubscription?.cancel();
+    _storeSubscription?.cancel();
     _userSubscription = _authService.appUserStream(uid).listen((user) async {
       _appUser = user;
 
       if (user == null || user.storeId == null) {
+        _storeSubscription?.cancel();
+        _store = null;
         _state = AuthState.needsRoleSelection;
         notifyListeners();
         return;
@@ -77,13 +81,27 @@ class AuthProvider extends ChangeNotifier {
         return;
       }
 
-      // Load store data
-      if (user.storeId != null) {
+      // Load store data immediately first time
+      if (_store?.id != user.storeId) {
         _store = await _storeService.getStore(user.storeId!);
-      }
+        _state = AuthState.authenticated;
+        notifyListeners();
 
-      _state = AuthState.authenticated;
-      notifyListeners();
+        // Then listen for real-time updates
+        _storeSubscription?.cancel();
+        _storeSubscription = _storeService.storeStream(user.storeId!).listen(
+          (store) {
+            if (store != null) {
+              _store = store;
+              notifyListeners();
+            }
+          },
+          onError: (_) {},
+        );
+      } else {
+        _state = AuthState.authenticated;
+        notifyListeners();
+      }
     });
   }
 
@@ -178,6 +196,7 @@ class AuthProvider extends ChangeNotifier {
       _listenToUser(firebaseUser.uid);
       return true;
     } catch (e) {
+      debugPrint('Error joining store: $e');
       _error = 'Failed to join store. Please try again.';
       notifyListeners();
       return false;
@@ -187,6 +206,7 @@ class AuthProvider extends ChangeNotifier {
   /// Sign out
   Future<void> signOut() async {
     _userSubscription?.cancel();
+    _storeSubscription?.cancel();
     await _authService.signOut();
   }
 
@@ -199,6 +219,7 @@ class AuthProvider extends ChangeNotifier {
   @override
   void dispose() {
     _userSubscription?.cancel();
+    _storeSubscription?.cancel();
     super.dispose();
   }
 }

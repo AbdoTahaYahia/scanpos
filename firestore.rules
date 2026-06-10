@@ -65,6 +65,15 @@ service cloud.firestore {
       return diff.affectedKeys().hasOnly(['displayName', 'photoUrl', 'email']);
     }
 
+    function isValidOwnerStoreJoin() {
+      let diff = request.resource.data.diff(resource.data);
+      return (resource.data.storeId == null || resource.data.role == 'pending') &&
+        request.resource.data.role == 'pending' &&
+        request.resource.data.roles == [] &&
+        request.resource.data.storeId is string &&
+        diff.affectedKeys().hasOnly(['displayName', 'photoUrl', 'email', 'storeId', 'createdAt', 'role', 'roles']);
+    }
+
     function isValidManagerUserUpdate() {
       return request.resource.data.uid == resource.data.uid &&
         (
@@ -91,7 +100,7 @@ service cloud.firestore {
       );
       allow create: if isAuthenticated() && isOwner(userId) && isValidNewUser();
       allow update: if isAuthenticated() && (
-        (isOwner(userId) && isSafeOwnerProfileUpdate()) ||
+        (isOwner(userId) && (isSafeOwnerProfileUpdate() || isValidOwnerStoreJoin())) ||
         (isStoreManager(resource.data.storeId) && isValidManagerUserUpdate())
       );
       allow delete: if false; // No user deletion from client

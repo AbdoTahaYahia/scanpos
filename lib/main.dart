@@ -88,23 +88,12 @@ class _SplashLogo extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 100,
-          height: 100,
-          decoration: const BoxDecoration(
-            color: AppTheme.black,
-            shape: BoxShape.circle,
-          ),
-          child: const Center(
-            child: Text(
-              'S',
-              style: TextStyle(
-                color: AppTheme.white,
-                fontSize: 48,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -2,
-              ),
-            ),
+        ClipOval(
+          child: Image.asset(
+            'assets/images/app_icon.png',
+            width: 100,
+            height: 100,
+            fit: BoxFit.cover,
           ),
         ),
         const SizedBox(height: 16),

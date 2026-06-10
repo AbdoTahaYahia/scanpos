@@ -21,24 +21,12 @@ class SignInScreen extends StatelessWidget {
               const Spacer(flex: 2),
 
               // Logo / Brand
-              Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: AppTheme.black,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppTheme.black, width: 3),
-                ),
-                child: const Center(
-                  child: Text(
-                    'S',
-                    style: TextStyle(
-                      color: AppTheme.white,
-                      fontSize: 56,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -2,
-                    ),
-                  ),
+              ClipOval(
+                child: Image.asset(
+                  'assets/images/app_icon.png',
+                  width: 120,
+                  height: 120,
+                  fit: BoxFit.cover,
                 ),
               ),
 
