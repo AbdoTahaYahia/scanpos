@@ -23,8 +23,10 @@ class SettingsScreen extends StatelessWidget {
 
     if (user == null) return const SizedBox.shrink();
 
-    return Drawer(
-      backgroundColor: AppTheme.white,
+    return SizedBox(
+      width: MediaQuery.of(context).size.width * 0.85,
+      child: Drawer(
+        backgroundColor: AppTheme.white,
       child: SafeArea(
         child: SingleChildScrollView(
           padding: AppStyles.paddingScreen,
@@ -279,6 +281,7 @@ class SettingsScreen extends StatelessWidget {
           ),
         ),
       ),
+      ),
     );
   }
 }
@@ -472,49 +475,124 @@ class _RoleToggleRowState extends State<_RoleToggleRow> {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
       children: [
-        _RoleChip(
-          label: 'Cashier',
-          icon: Icons.point_of_sale_rounded,
-          isSelected: _selectedRoles.contains('cashier'),
-          onTap: () => _toggle('cashier'),
+        // Row 1: Role chips
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _RoleChip(
+              label: 'Cashier',
+              icon: Icons.point_of_sale_rounded,
+              isSelected: _selectedRoles.contains('cashier'),
+              onTap: () => _toggle('cashier'),
+            ),
+            _RoleChip(
+              label: 'Warehouse',
+              icon: Icons.warehouse_rounded,
+              isSelected: _selectedRoles.contains('warehouse'),
+              onTap: () => _toggle('warehouse'),
+            ),
+          ],
         ),
-        AppStyles.gapW8,
-        _RoleChip(
-          label: 'Warehouse',
-          icon: Icons.warehouse_rounded,
-          isSelected: _selectedRoles.contains('warehouse'),
-          onTap: () => _toggle('warehouse'),
-        ),
-        const Spacer(),
-        if (_saving)
-          const SizedBox(
-            width: 24, height: 24,
-            child: CircularProgressIndicator(color: AppTheme.black, strokeWidth: 2),
-          )
-        else
-          GestureDetector(
-            onTap: _selectedRoles.isEmpty ? null : _save,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: _selectedRoles.isEmpty ? AppTheme.surfaceContainer : AppTheme.black,
-                borderRadius: BorderRadius.circular(AppTheme.radiusFull),
-              ),
-              child: Text(
-                widget.isPendingApproval ? 'Approve' : 'Save',
-                style: AppTheme.labelBold.copyWith(
-                  color: _selectedRoles.isEmpty ? AppTheme.outline : AppTheme.white,
+        AppStyles.gap8,
+        // Row 2: Action buttons
+        Row(
+          children: [
+            if (_saving)
+              const SizedBox(
+                width: 24, height: 24,
+                child: CircularProgressIndicator(color: AppTheme.black, strokeWidth: 2),
+              )
+            else ...[
+              Expanded(
+                child: GestureDetector(
+                  onTap: _selectedRoles.isEmpty ? null : _save,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _selectedRoles.isEmpty ? AppTheme.surfaceContainer : AppTheme.black,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      widget.isPendingApproval ? 'Approve' : 'Save',
+                      style: AppTheme.labelBold.copyWith(
+                        color: _selectedRoles.isEmpty ? AppTheme.outline : AppTheme.white,
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
+              if (widget.isPendingApproval) ...[
+                AppStyles.gapW8,
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _confirmReject(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.white,
+                        borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                        border: Border.all(color: AppTheme.error, width: 2),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'Reject',
+                        style: AppTheme.labelBold.copyWith(color: AppTheme.error),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ],
+        ),
       ],
     );
   }
-}
 
+  void _confirmReject(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('Reject Request?', style: AppTheme.headlineMd),
+            AppStyles.gap8,
+            Text(
+              '${widget.employee.displayName} will be removed from the store.',
+              style: AppTheme.bodySm.copyWith(color: AppTheme.onSurfaceVariant),
+              textAlign: TextAlign.center,
+            ),
+            AppStyles.gap24,
+            SizedBox(
+              width: double.infinity,
+              child: PillButton(
+                label: 'Reject',
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  widget.storeService.removeEmployee(widget.employee.uid);
+                },
+              ),
+            ),
+            AppStyles.gap12,
+            SizedBox(
+              width: double.infinity,
+              child: PillButton(
+                label: 'Cancel',
+                variant: PillButtonVariant.secondary,
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}
 /// Selectable role chip with icon
 class _RoleChip extends StatelessWidget {
   final String label;
