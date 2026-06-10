@@ -33,21 +33,9 @@ class SignInScreen extends StatelessWidget {
               AppStyles.gap32,
 
               // App Name
-              Text(
-                'ScanPos',
-                style: AppTheme.display,
-              ),
+              Text('ScanPos', style: AppTheme.display),
 
               AppStyles.gap12,
-
-              // Tagline
-              Text(
-                'Supermarket POS & Inventory',
-                style: AppTheme.bodyLg.copyWith(
-                  color: AppTheme.onSurfaceVariant,
-                ),
-                textAlign: TextAlign.center,
-              ),
 
               const Spacer(flex: 3),
 
