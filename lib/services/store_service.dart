@@ -1,13 +1,13 @@
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+
 import 'package:flutter/foundation.dart';
 import '../models/store.dart';
 import '../models/app_user.dart';
 
 class StoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseFunctions _functions = FirebaseFunctions.instance;
+
 
   /// Generate a random 6-character alphanumeric invite code
   String _generateInviteCode() {
@@ -33,25 +33,18 @@ class StoreService {
     return store;
   }
 
-  /// Find a store by invite code — uses Cloud Function for secure lookup
-  /// so we don't need broad read access on the stores collection
+  /// Find a store by invite code — queries Firestore directly
   Future<Store?> findStoreByInviteCode(String code) async {
     try {
-      final callable = _functions.httpsCallable('lookupStoreByInviteCode');
-      final result = await callable.call({'inviteCode': code.toUpperCase()});
-      final data = result.data as Map<String, dynamic>;
+      final snapshot = await _firestore
+          .collection('stores')
+          .where('inviteCode', isEqualTo: code.toUpperCase())
+          .limit(1)
+          .get();
 
-      if (data['found'] != true) return null;
+      if (snapshot.docs.isEmpty) return null;
 
-      final storeInfo = data['store'] as Map<String, dynamic>;
-      // Return a minimal Store with id and name (enough for joining)
-      return Store(
-        id: storeInfo['id'] as String,
-        name: storeInfo['name'] as String,
-        managerId: '',
-        inviteCode: code.toUpperCase(),
-        createdAt: DateTime.now(),
-      );
+      return Store.fromMap(snapshot.docs.first.data());
     } catch (e) {
       debugPrint('Error looking up invite code: $e');
       return null;

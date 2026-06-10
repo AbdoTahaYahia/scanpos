@@ -47,106 +47,108 @@ class _EnterInviteCodeScreenState extends State<EnterInviteCodeScreen> {
     final authProvider = context.watch<AuthProvider>();
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Padding(
           padding: AppStyles.paddingScreen,
           child: Form(
             key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                AppStyles.gap16,
+            child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AppStyles.gap16,
 
-                // Back button
-                CircleAvatar(
-                  backgroundColor: AppTheme.white,
-                  foregroundColor: AppTheme.black,
-                  radius: 24,
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back_rounded),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ),
-
-                AppStyles.gap32,
-
-                Text('Join a Store', style: AppTheme.display),
-                AppStyles.gap8,
-                Text(
-                  'Enter the 6-digit invite code from your manager.',
-                  style: AppTheme.bodyLg.copyWith(
-                    color: AppTheme.onSurfaceVariant,
-                  ),
-                ),
-
-                AppStyles.gap48,
-
-                // Invite code input
-                PillInput(
-                  hint: 'Invite Code (e.g. ABC123)',
-                  controller: _controller,
-                  autofocus: true,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _submitCode(),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter an invite code';
-                    }
-                    if (value.trim().length != 6) {
-                      return 'Invite code must be 6 characters';
-                    }
-                    return null;
-                  },
-                ),
-
-                AppStyles.gap16,
-
-                // Error
-                if (authProvider.error != null) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 14,
+                  // Back button
+                  CircleAvatar(
+                    backgroundColor: AppTheme.white,
+                    foregroundColor: AppTheme.black,
+                    radius: 24,
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      onPressed: () => Navigator.of(context).pop(),
                     ),
-                    decoration: BoxDecoration(
-                      color: AppTheme.errorContainer,
-                      borderRadius:
-                          BorderRadius.circular(AppTheme.radiusFull),
-                      border: Border.all(color: AppTheme.error, width: 2),
+                  ),
+
+                  AppStyles.gap32,
+
+                  Text('Join a Store', style: AppTheme.display),
+                  AppStyles.gap8,
+                  Text(
+                    'Enter the 6-digit invite code from your manager.',
+                    style: AppTheme.bodyLg.copyWith(
+                      color: AppTheme.onSurfaceVariant,
                     ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.error_outline,
-                            color: AppTheme.error, size: 20),
-                        AppStyles.gapW8,
-                        Expanded(
-                          child: Text(
-                            authProvider.error!,
-                            style: AppTheme.bodySm.copyWith(
-                              color: AppTheme.error,
+                  ),
+
+                  AppStyles.gap48,
+
+                  // Invite code input
+                  PillInput(
+                    hint: 'Invite Code (e.g. ABC123)',
+                    controller: _controller,
+                    autofocus: true,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _submitCode(),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter an invite code';
+                      }
+                      if (value.trim().length != 6) {
+                        return 'Invite code must be 6 characters';
+                      }
+                      return null;
+                    },
+                  ),
+
+                  AppStyles.gap16,
+
+                  // Error
+                  if (authProvider.error != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.errorContainer,
+                        borderRadius:
+                            BorderRadius.circular(AppTheme.radiusFull),
+                        border: Border.all(color: AppTheme.error, width: 2),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.error_outline,
+                              color: AppTheme.error, size: 20),
+                          AppStyles.gapW8,
+                          Expanded(
+                            child: Text(
+                              authProvider.error!,
+                              style: AppTheme.bodySm.copyWith(
+                                color: AppTheme.error,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                    ),
+                    AppStyles.gap16,
+                  ],
+
+                  AppStyles.gap8,
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: PillButton(
+                      label: 'Join Store',
+                      onPressed: _isLoading ? null : _submitCode,
+                      isLoading: _isLoading,
+                      height: 64,
                     ),
                   ),
-                  AppStyles.gap16,
                 ],
-
-                AppStyles.gap8,
-
-                SizedBox(
-                  width: double.infinity,
-                  child: PillButton(
-                    label: 'Join Store',
-                    onPressed: _isLoading ? null : _submitCode,
-                    isLoading: _isLoading,
-                    height: 64,
-                  ),
-                ),
-
-                const Spacer(),
-              ],
+              ),
             ),
           ),
         ),

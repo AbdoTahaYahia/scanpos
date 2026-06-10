@@ -164,59 +164,62 @@ class RoleSelectionScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Create Your Store', style: AppTheme.headlineMd),
-                AppStyles.gap8,
-                Text(
-                  'Enter your store name to get started.',
-                  style: AppTheme.bodySm.copyWith(
-                    color: AppTheme.onSurfaceVariant,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Create Your Store', style: AppTheme.headlineMd),
+                  AppStyles.gap8,
+                  Text(
+                    'Enter your store name to get started.',
+                    style: AppTheme.bodySm.copyWith(
+                      color: AppTheme.onSurfaceVariant,
+                    ),
                   ),
-                ),
-                AppStyles.gap24,
-                PillInput(
-                  hint: 'Store name',
-                  controller: controller,
-                  autofocus: true,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter a store name';
-                    }
-                    return null;
-                  },
-                ),
-                AppStyles.gap24,
-                SizedBox(
-                  width: double.infinity,
-                  child: PillButton(
-                    label: 'Create Store',
-                    onPressed: () {
-                      if (formKey.currentState!.validate()) {
-                        Navigator.of(ctx).pop();
-                        context
-                            .read<AuthProvider>()
-                            .registerAsManager(controller.text.trim());
+                  AppStyles.gap24,
+                  PillInput(
+                    hint: 'Store name',
+                    controller: controller,
+                    autofocus: true,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter a store name';
                       }
+                      return null;
                     },
                   ),
-                ),
-                AppStyles.gap12,
-                SizedBox(
-                  width: double.infinity,
-                  child: PillButton(
-                    label: 'Cancel',
-                    variant: PillButtonVariant.secondary,
-                    onPressed: () => Navigator.of(ctx).pop(),
+                  AppStyles.gap24,
+                  SizedBox(
+                    width: double.infinity,
+                    child: PillButton(
+                      label: 'Create Store',
+                      onPressed: () {
+                        if (formKey.currentState!.validate()) {
+                          Navigator.of(ctx).pop();
+                          context
+                              .read<AuthProvider>()
+                              .registerAsManager(controller.text.trim());
+                        }
+                      },
+                    ),
                   ),
-                ),
-              ],
+                  AppStyles.gap12,
+                  SizedBox(
+                    width: double.infinity,
+                    child: PillButton(
+                      label: 'Cancel',
+                      variant: PillButtonVariant.secondary,
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
