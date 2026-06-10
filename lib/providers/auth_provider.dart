@@ -115,6 +115,7 @@ class AuthProvider extends ChangeNotifier {
       await _authService.signInWithGoogle();
       // Auth state listener handles the rest
     } catch (e) {
+      debugPrint('Error signing in: $e');
       _error = 'Failed to sign in. Please try again.';
       _state = AuthState.unauthenticated;
       notifyListeners();
