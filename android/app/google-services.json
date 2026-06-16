@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "509693229826-4v7u4bh7k8p886uvdhj5s1j0899bgdd2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.scanpos.app",
+            "certificate_hash": "8467235e5ae54fa5c1ae47a06004ad5b915d7d6b"
+          }
+        },
+        {
           "client_id": "509693229826-2qotd8cjuhaoo7vd3aqa64acnii8npi2.apps.googleusercontent.com",
           "client_type": 3
         }
